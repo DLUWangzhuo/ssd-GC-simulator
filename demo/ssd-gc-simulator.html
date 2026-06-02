@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSD GC 模拟器 - 可视化垃圾回收演示</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #1a1a2e;
+            --accent: #e94560;
+            --bg: #16213e;
+            --text: #eaeaea;
+            --success: #4ecca3;
+            --warning: #ffc107;
+            --page-empty: #ffffff;
+            --page-valid: #90EE90;
+            --page-valid-border: #228B22;
+            --page-invalid: #CD853F;
+            --page-invalid-border: #8B4513;
+            --page-size: 44px;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--primary) 0%, #0f0f23 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        header h1 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 28px;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+
+        header p {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: var(--primary);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .panel-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--accent);
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .control-section h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--success);
+            margin-bottom: 12px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .btn {
+            font-family: 'Noto Sans SC', sans-serif;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #ff6b8a;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: var(--primary);
+        }
+
+        .btn-success:hover {
+            background: #6fe8b8;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: var(--primary);
+        }
+
+        .btn-warning:hover {
+            background: #ffda44;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .status-item {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .status-item .label {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+
+        .status-item .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .status-item .value.warning {
+            color: var(--warning);
+        }
+
+        .status-item .value.danger {
+            color: var(--accent);
+        }
+
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+        }
+
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            opacity: 0.9;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-entry.gc {
+            color: var(--warning);
+        }
+
+        .log-entry.write {
+            color: var(--success);
+        }
+
+        .visual-area {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .ssd-container {
+            background: var(--primary);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .ssd-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .ssd-header h2 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+            color: var(--accent);
+        }
+
+        .ssd-legend {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        .ssd-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .superblock {
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .superblock.op {
+            border-color: var(--accent);
+            border-style: dashed;
+        }
+
+        .superblock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .superblock-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text);
+            opacity: 0.8;
+        }
+
+        .superblock.op .superblock-title {
+            color: var(--accent);
+        }
+
+        .superblock-stats {
+            font-size: 11px;
+            opacity: 0.6;
+        }
+
+        .blocks-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .block {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .block-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            text-align: center;
+            opacity: 0.5;
+            margin-bottom: 2px;
+        }
+
+        .pages-grid {
+            display: grid;
+            grid-template-columns: repeat(9, var(--page-size));
+            gap: 3px;
+        }
+
+        .page {
+            width: var(--page-size);
+            height: var(--page-size);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .page.empty {
+            background: var(--page-empty);
+            border: 1px solid #ddd;
+            color: transparent;
+        }
+
+        .page.valid {
+            background: var(--page-valid);
+            border: 2px solid var(--page-valid-border);
+            color: #1a5c1a;
+        }
+
+        .page.invalid {
+            background: var(--page-invalid);
+            border: 2px solid var(--page-invalid-border);
+            color: #5a3a1a;
+            text-decoration: line-through;
+            opacity: 0.85;
+        }
+
+        .page.highlight {
+            animation: pulse 0.5s ease;
+            box-shadow: 0 0 0 3px var(--accent);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .mapping-section {
+            background: var(--primary);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .mapping-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .mapping-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--accent);
+        }
+
+        .mapping-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mapping-table-container {
+            max-height: 200px;
+            overflow: auto;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        .mapping-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+        }
+
+        .mapping-table th {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 12px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .mapping-table td {
+            padding: 6px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .mapping-table tr:hover td {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .gc-threshold {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .gc-threshold label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .gc-threshold input {
+            width: 60px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .gc-threshold input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .gc-step-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .gc-step-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .gc-step-modal {
+            background: var(--primary);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            border: 2px solid var(--warning);
+        }
+
+        .gc-step-modal h3 {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--warning);
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+
+        .gc-step-modal p {
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .gc-step-progress {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .gc-step-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+        }
+
+        .gc-step-dot.active {
+            background: var(--warning);
+        }
+
+        .gc-step-dot.completed {
+            background: var(--success);
+        }
+
+        .history-nav {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .btn-icon {
+            padding: 8px 12px;
+            font-size: 11px;
+        }
+
+        @media (max-width: 900px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+
+            :root {
+                --page-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SSD 垃圾回收（GC）模拟器</h1>
+            <p>可视化演示 NAND Flash 垃圾回收原理 | 4 Die × 5 Block × 9 Page × 5 Super Block</p>
+        </header>
+
+        <div class="main-layout">
+            <aside class="control-panel">
+                <div class="panel">
+                    <div class="panel-title">SSD 结构概览</div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="label">总 Super Block</div>
+                            <div class="value">5</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">OP 空间</div>
+                            <div class="value">1</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">用户 Super Block</div>
+                            <div class="value">4</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">每 Block 页数</div>
+                            <div class="value">9</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 16px;">
+                    <div class="panel-title">操作控制</div>
+
+                    <div class="control-section">
+                        <h3>顺序写入</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-success" onclick="sequentialWrite(1)">
+                                <span>LBA顺序</span> 写 1 页
+                            </button>
+                            <button class="btn btn-success" onclick="sequentialWrite(9)">
+                                <span>LBA顺序</span> 写 1 块 (9页)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>随机写入</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" onclick="randomWrite(1)">
+                                <span>随机LBA</span> 写 1 页
+                            </button>
+                            <button class="btn btn-primary" onclick="randomWrite(9)">
+                                <span>随机LBA</span> 写 1 块 (9页)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>GC 控制</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-warning" onclick="triggerGC()">
+                                手动触发 GC
+                            </button>
+                        </div>
+                        <div class="gc-threshold">
+                            <label>GC阈值:</label>
+                            <input type="number" id="gcThreshold" value="20" min="10" max="50" onchange="updateThreshold()">
+                            <span>%</span>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>历史记录</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary btn-icon" onclick="undo()" id="undoBtn">
+                                上一步 (Undo)
+                            </button>
+                            <button class="btn btn-secondary btn-icon" onclick="redo()" id="redoBtn">
+                                下一步 (Redo)
+                            </button>
+                            <button class="btn btn-secondary btn-icon" onclick="resetSSD()">
+                                重置 SSD
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 16px;">
+                    <div class="panel-title">实时状态</div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="label">已用页数</div>
+                            <div class="value" id="usedPages">0</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">可用页数</div>
+                            <div class="value" id="freePages">144</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">无效页数</div>
+                            <div class="value" id="invalidPages">0</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">空闲比例</div>
+                            <div class="value" id="freeRatio">100%</div>
+                        </div>
+                    </div>
+
+                    <div class="control-section" style="margin-top: 16px;">
+                        <h3>操作日志</h3>
+                        <div class="log-container" id="logContainer">
+                            <div class="log-entry">SSD 初始化完成</div>
+                        </div>
+                    </div>
+
+                    <div class="history-nav">
+                        <span style="font-size: 11px; opacity: 0.6;">历史: </span>
+                        <span id="historyPos" style="font-family: 'JetBrains Mono'; font-size: 11px;">0 / 0</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="visual-area">
+                <div class="ssd-container">
+                    <div class="ssd-header">
+                        <h2>物理页分布</h2>
+                        <div class="ssd-legend">
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: var(--page-empty); border: 1px solid #ddd;"></div>
+                                <span>空页</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: var(--page-valid); border: 2px solid var(--page-valid-border);"></div>
+                                <span>有效</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: var(--page-invalid); border: 2px solid var(--page-invalid-border);"></div>
+                                <span>无效</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ssd-grid" id="ssdGrid"></div>
+                </div>
+
+                <div class="mapping-section">
+                    <div class="mapping-header">
+                        <div class="mapping-title">逻辑地址映射表 (LPA → PPA)</div>
+                    </div>
+                    <div class="mapping-table-container">
+                        <table class="mapping-table">
+                            <thead>
+                                <tr>
+                                    <th>LPA (逻辑页)</th>
+                                    <th>PPA (物理位置)</th>
+                                    <th>状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mappingTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="gc-step-overlay" id="gcOverlay">
+        <div class="gc-step-modal">
+            <h3 id="gcStepTitle">GC 执行中</h3>
+            <p id="gcStepDesc">正在执行垃圾回收...</p>
+            <div class="gc-step-progress">
+                <div class="gc-step-dot" id="dot1"></div>
+                <div class="gc-step-dot" id="dot2"></div>
+                <div class="gc-step-dot" id="dot3"></div>
+            </div>
+            <button class="btn btn-warning" onclick="gcStepNext()">下一步</button>
+        </div>
+    </div>
+
+    <script>
+        // SSD Configuration
+        const CONFIG = {
+            dieCount: 4,
+            blocksPerDie: 5,
+            pagesPerBlock: 9,
+            totalSuperBlocks: 5,
+            opSuperBlocks: 1,
+            gcThreshold: 0.20,
+            maxHistory: 100
+        };
+
+        // SSD State
+        let ssdState = {
+            pages: [], // 180 pages total
+            lpaToPpa: new Map(), // LPA -> PPA mapping
+            ppaToLpa: new Map(), // PPA -> LPA mapping (for invalidation)
+            sequentialLpa: 0,
+            history: [],
+            historyIndex: -1
+        };
+
+        let gcStepCallback = null;
+
+        // Initialize SSD
+        function initSSD() {
+            ssdState.pages = [];
+            ssdState.lpaToPpa.clear();
+            ssdState.ppaToLpa.clear();
+            ssdState.sequentialLpa = 0;
+            ssdState.history = [];
+            ssdState.historyIndex = -1;
+
+            // Create 180 pages
+            for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
+                for (let die = 0; die < CONFIG.dieCount; die++) {
+                    for (let block = 0; block < CONFIG.blocksPerDie; block++) {
+                        for (let page = 0; page < CONFIG.pagesPerBlock; page++) {
+                            const ppa = ssdState.pages.length;
+                            ssdState.pages.push({
+                                ppa,
+                                sb,
+                                die,
+                                block,
+                                page,
+                                state: 'empty', // empty, valid, invalid
+                                lpa: null
+                            });
+                        }
+                    }
+                }
+            }
+
+            saveState();
+            renderSSD();
+            updateStatus();
+            updateMappingTable();
+        }
+
+        // Get pages by Super Block
+        function getSuperBlockPages(sb) {
+            return ssdState.pages.filter(p => p.sb === sb);
+        }
+
+        // Find free pages
+        function getFreePages() {
+            return ssdState.pages.filter(p => p.state === 'empty');
+        }
+
+        // Find invalid pages
+        function getInvalidPages() {
+            return ssdState.pages.filter(p => p.state === 'invalid');
+        }
+
+        // Get free pages count
+        function getFreePagesCount() {
+            return getFreePages().length;
+        }
+
+        // Get used pages count
+        function getUsedPagesCount() {
+            return ssdState.pages.filter(p => p.state === 'valid').length;
+        }
+
+        // Get invalid pages count
+        function getInvalidPagesCount() {
+            return getInvalidPages().length;
+        }
+
+        // Check if GC should be triggered
+        function shouldTriggerGC() {
+            const userSuperBlocks = CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+            const userPages = userSuperBlocks * CONFIG.dieCount * CONFIG.pagesPerBlock;
+            const freePages = getFreePagesCount();
+            const freeRatio = freePages / userPages;
+            return freeRatio < CONFIG.gcThreshold && freePages < 20;
+        }
+
+        // Save current state for undo
+        function saveState() {
+            const stateCopy = {
+                pages: ssdState.pages.map(p => ({...p})),
+                lpaToPpa: new Map(ssdState.lpaToPpa),
+                ppaToLpa: new Map(ssdState.ppaToLpa),
+                sequentialLpa: ssdState.sequentialLpa
+            };
+
+            // Remove future states if we're not at the end
+            if (ssdState.historyIndex < ssdState.history.length - 1) {
+                ssdState.history = ssdState.history.slice(0, ssdState.historyIndex + 1);
+            }
+
+            ssdState.history.push(stateCopy);
+
+            // Limit history size
+            if (ssdState.history.length > CONFIG.maxHistory) {
+                ssdState.history.shift();
+            } else {
+                ssdState.historyIndex++;
+            }
+
+            updateHistoryButtons();
+        }
+
+        // Undo
+        function undo() {
+            if (ssdState.historyIndex > 0) {
+                ssdState.historyIndex--;
+                const state = ssdState.history[ssdState.historyIndex];
+                ssdState.pages = state.pages.map(p => ({...p}));
+                ssdState.lpaToPpa = new Map(state.lpaToPpa);
+                ssdState.ppaToLpa = new Map(state.ppaToLpa);
+                ssdState.sequentialLpa = state.sequentialLpa;
+
+                renderSSD();
+                updateStatus();
+                updateMappingTable();
+                addLog('撤销操作', 'write');
+                updateHistoryButtons();
+            }
+        }
+
+        // Redo
+        function redo() {
+            if (ssdState.historyIndex < ssdState.history.length - 1) {
+                ssdState.historyIndex++;
+                const state = ssdState.history[ssdState.historyIndex];
+                ssdState.pages = state.pages.map(p => ({...p}));
+                ssdState.lpaToPpa = new Map(state.lpaToPpa);
+                ssdState.ppaToLpa = new Map(state.ppaToLpa);
+                ssdState.sequentialLpa = state.sequentialLpa;
+
+                renderSSD();
+                updateStatus();
+                updateMappingTable();
+                addLog('重做操作', 'write');
+                updateHistoryButtons();
+            }
+        }
+
+        function updateHistoryButtons() {
+            document.getElementById('undoBtn').disabled = ssdState.historyIndex <= 0;
+            document.getElementById('redoBtn').disabled = ssdState.historyIndex >= ssdState.history.length - 1;
+            document.getElementById('historyPos').textContent = `${ssdState.historyIndex} / ${ssdState.history.length - 1}`;
+        }
+
+        // Sequential write
+        function sequentialWrite(count) {
+            if (getFreePagesCount() < count) {
+                addLog('写入失败: 可用空间不足!', 'gc');
+                return;
+            }
+
+            const freePages = getFreePages();
+            const lpaStart = ssdState.sequentialLpa;
+            const pagesToWrite = [];
+
+            for (let i = 0; i < count; i++) {
+                const lpa = (lpaStart + i) % 144; // Max user LPA is 143
+
+                // Check if this LPA already exists
+                if (ssdState.lpaToPpa.has(lpa)) {
+                    const oldPpa = ssdState.lpaToPpa.get(lpa);
+                    const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
+                    if (oldPage) {
+                        oldPage.state = 'invalid';
+                        ssdState.ppaToLpa.set(oldPpa, lpa); // Mark as invalid
+                    }
+                }
+
+                const freePage = freePages[i];
+                freePage.state = 'valid';
+                freePage.lpa = lpa;
+
+                ssdState.lpaToPpa.set(lpa, freePage.ppa);
+                ssdState.ppaToLpa.delete(freePage.ppa);
+
+                pagesToWrite.push({lpa, ppa: freePage.ppa, die: freePage.die, block: freePage.block});
+            }
+
+            ssdState.sequentialLpa = (lpaStart + count) % 144;
+
+            saveState();
+            renderSSD();
+            updateStatus();
+            updateMappingTable();
+
+            addLog(`顺序写入 ${count} 页: LPA ${lpaStart}→${lpaStart + count - 1}`, 'write');
+            highlightPages(pagesToWrite.map(p => p.ppa));
+
+            if (shouldTriggerGC()) {
+                addLog('触发GC: 空闲容量低于阈值!', 'gc');
+            }
+        }
+
+        // Random write
+        function randomWrite(count) {
+            if (getFreePagesCount() < count) {
+                addLog('写入失败: 可用空间不足!', 'gc');
+                return;
+            }
+
+            const freePages = [...getFreePages()];
+            const pagesToWrite = [];
+            const writtenLpas = new Set();
+
+            for (let i = 0; i < count; i++) {
+                let lpa;
+                let attempts = 0;
+
+                // Try to find an unwritten LPA
+                do {
+                    lpa = Math.floor(Math.random() * 144);
+                    attempts++;
+                } while (writtenLpas.has(lpa) && attempts < 100);
+
+                writtenLpas.add(lpa);
+
+                // Check if this LPA already exists
+                if (ssdState.lpaToPpa.has(lpa)) {
+                    const oldPpa = ssdState.lpaToPpa.get(lpa);
+                    const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
+                    if (oldPage) {
+                        oldPage.state = 'invalid';
+                        ssdState.ppaToLpa.set(oldPpa, lpa);
+                    }
+                }
+
+                const freePage = freePages[i];
+                freePage.state = 'valid';
+                freePage.lpa = lpa;
+
+                ssdState.lpaToPpa.set(lpa, freePage.ppa);
+                ssdState.ppaToLpa.delete(freePage.ppa);
+
+                pagesToWrite.push({lpa, ppa: freePage.ppa, die: freePage.die, block: freePage.block});
+            }
+
+            saveState();
+            renderSSD();
+            updateStatus();
+            updateMappingTable();
+
+            const lpaList = pagesToWrite.map(p => p.lpa).join(', ');
+            addLog(`随机写入 ${count} 页: LPA [${lpaList}]`, 'write');
+            highlightPages(pagesToWrite.map(p => p.ppa));
+
+            if (shouldTriggerGC()) {
+                addLog('触发GC: 空闲容量低于阈值!', 'gc');
+            }
+        }
+
+        // Manual GC trigger
+        function triggerGC() {
+            const invalidPages = getInvalidPages();
+            if (invalidPages.length === 0) {
+                addLog('GC: 无效页为空，无需回收', 'gc');
+                return;
+            }
+
+            performGC();
+        }
+
+        // Perform GC
+        function performGC() {
+            // Find the Super Block with most invalid pages
+            const sbInvalidCounts = [];
+            for (let sb = 0; sb < CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks; sb++) {
+                const sbPages = getSuperBlockPages(sb);
+                const invalidCount = sbPages.filter(p => p.state === 'invalid').length;
+                const validCount = sbPages.filter(p => p.state === 'valid').length;
+                sbInvalidCounts.push({sb, invalidCount, validCount, total: sbPages.length});
+            }
+
+            // Sort by invalid count descending
+            sbInvalidCounts.sort((a, b) => b.invalidCount - a.invalidCount);
+            const victimSB = sbInvalidCounts[0];
+
+            if (victimSB.invalidCount === 0) {
+                addLog('GC: 无需回收，所有块均无可回收空间', 'gc');
+                return;
+            }
+
+            // Show GC step-by-step
+            showGCSteps(victimSB);
+        }
+
+        // Show GC steps
+        function showGCSteps(victimSB) {
+            const victimPages = getSuperBlockPages(victimSB.sb);
+            const validPages = victimPages.filter(p => p.state === 'valid');
+            const invalidPages = victimPages.filter(p => p.state === 'invalid');
+
+            let currentStep = 0;
+            const totalSteps = validPages.length > 0 ? 3 : 2;
+
+            gcStepCallback = null;
+
+            document.getElementById('gcOverlay').classList.add('active');
+
+            function updateStepUI(step, title, desc) {
+                document.getElementById('gcStepTitle').textContent = title;
+                document.getElementById('gcStepDesc').textContent = desc;
+
+                for (let i = 1; i <= 3; i++) {
+                    const dot = document.getElementById('dot' + i);
+                    dot.className = 'gc-step-dot';
+                    if (i < step) dot.classList.add('completed');
+                    else if (i === step) dot.classList.add('active');
+                }
+            }
+
+            updateStepUI(1, '选择 Victim Super Block',
+                `已选择 Super Block ${victimSB.sb} 作为回收目标\n` +
+                `该块包含 ${victimSB.invalidCount} 个无效页, ${victimSB.validCount} 个有效页\n` +
+                `无效页将被回收，有效页需要迁移到其他位置`);
+
+            window.gcStepNext = function() {
+                currentStep++;
+
+                if (currentStep === 2 && validPages.length > 0) {
+                    // Migrate valid data
+                    updateStepUI(2, '迁移有效数据',
+                        `正在迁移 ${validPages.length} 个有效页...\n` +
+                        validPages.slice(0, 3).map(p => `LPA ${p.lpa} → 新物理位置`).join('\n') +
+                        (validPages.length > 3 ? '\n...' : ''));
+
+                    // Actually migrate
+                    validPages.forEach(page => {
+                        const freePages = getFreePages();
+                        if (freePages.length > 0) {
+                            const newPage = freePages[0];
+                            const oldLpa = page.lpa;
+
+                            // Write to new location
+                            newPage.state = 'valid';
+                            newPage.lpa = oldLpa;
+
+                            // Update mapping
+                            ssdState.lpaToPpa.set(oldLpa, newPage.ppa);
+
+                            // Mark old as invalid
+                            page.state = 'invalid';
+                        }
+                    });
+
+                } else if (currentStep === 3 || (currentStep === 2 && validPages.length === 0)) {
+                    // Erase
+                    const step = validPages.length > 0 ? 3 : 2;
+                    updateStepUI(step, '擦除 Super Block',
+                        `正在擦除 Super Block ${victimSB.sb}...\n` +
+                        `所有 ${victimSB.total} 个页已重置为空`);
+
+                    // Actually erase
+                    victimPages.forEach(page => {
+                        page.state = 'empty';
+                        page.lpa = null;
+                    });
+
+                    // Update mapping - remove invalid mappings
+                    invalidPages.forEach(page => {
+                        if (page.lpa !== null) {
+                            ssdState.lpaToPpa.delete(page.lpa);
+                        }
+                    });
+
+                } else if (currentStep > totalSteps) {
+                    // Complete
+                    document.getElementById('gcOverlay').classList.remove('active');
+                    saveState();
+                    renderSSD();
+                    updateStatus();
+                    updateMappingTable();
+                    addLog(`GC完成: 回收 Super Block ${victimSB.sb}, 获得 ${victimSB.total} 个空页`, 'gc');
+                    return;
+                }
+            };
+        }
+
+        // Highlight pages temporarily
+        function highlightPages(ppas) {
+            ppas.forEach(ppa => {
+                const pageEl = document.querySelector(`[data-ppa="${ppa}"]`);
+                if (pageEl) {
+                    pageEl.classList.add('highlight');
+                    setTimeout(() => pageEl.classList.remove('highlight'), 500);
+                }
+            });
+        }
+
+        // Add log entry
+        function addLog(message, type) {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            container.insertBefore(entry, container.firstChild);
+
+            // Keep only last 50 entries
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Update status display
+        function updateStatus() {
+            const userSuperBlocks = CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+            const userPages = userSuperBlocks * CONFIG.dieCount * CONFIG.pagesPerBlock;
+            const freePages = getFreePagesCount();
+            const usedPages = getUsedPagesCount();
+            const invalidPages = getInvalidPagesCount();
+            const freeRatio = Math.round((freePages / userPages) * 100);
+
+            document.getElementById('freePages').textContent = freePages;
+            document.getElementById('usedPages').textContent = usedPages;
+            document.getElementById('invalidPages').textContent = invalidPages;
+
+            const ratioEl = document.getElementById('freeRatio');
+            ratioEl.textContent = freeRatio + '%';
+
+            const ratioPercent = freeRatio / 100;
+            if (ratioPercent < CONFIG.gcThreshold) {
+                ratioEl.className = 'value danger';
+            } else if (ratioPercent < CONFIG.gcThreshold * 1.5) {
+                ratioEl.className = 'value warning';
+            } else {
+                ratioEl.className = 'value';
+            }
+        }
+
+        // Update GC threshold
+        function updateThreshold() {
+            const value = parseInt(document.getElementById('gcThreshold').value);
+            CONFIG.gcThreshold = value / 100;
+            updateStatus();
+        }
+
+        // Render SSD visualization
+        function renderSSD() {
+            const grid = document.getElementById('ssdGrid');
+            grid.innerHTML = '';
+
+            for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
+                const isOp = sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+                const sbPages = getSuperBlockPages(sb);
+                const validCount = sbPages.filter(p => p.state === 'valid').length;
+                const invalidCount = sbPages.filter(p => p.state === 'invalid').length;
+
+                const sbDiv = document.createElement('div');
+                sbDiv.className = 'superblock' + (isOp ? ' op' : '');
+
+                sbDiv.innerHTML = `
+                    <div class="superblock-header">
+                        <div class="superblock-title">
+                            ${isOp ? '⬡' : '▣'} Super Block ${sb} ${isOp ? '(OP预留空间)' : ''}
+                        </div>
+                        <div class="superblock-stats">
+                            有效: ${validCount} | 无效: ${invalidCount} | 空: ${sbPages.length - validCount - invalidCount}
+                        </div>
+                    </div>
+                    <div class="blocks-row">
+                        ${Array.from({length: CONFIG.dieCount}, (_, die) => {
+                            const diePages = sbPages.filter(p => p.die === die);
+                            return `
+                                <div class="block">
+                                    <div class="block-label">Die ${die}</div>
+                                    <div class="pages-grid">
+                                        ${diePages.map(p => `
+                                            <div class="page ${p.state}" data-ppa="${p.ppa}">
+                                                ${p.lpa !== null ? p.lpa : ''}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+
+                grid.appendChild(sbDiv);
+            }
+        }
+
+        // Update mapping table
+        function updateMappingTable() {
+            const tbody = document.getElementById('mappingTable');
+            tbody.innerHTML = '';
+
+            const sortedLpas = Array.from(ssdState.lpaToPpa.keys()).sort((a, b) => a - b);
+
+            for (const lpa of sortedLpas) {
+                const ppa = ssdState.lpaToPpa.get(lpa);
+                const page = ssdState.pages.find(p => p.ppa === ppa);
+
+                if (page) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>LPA ${lpa}</td>
+                        <td>SB${page.sb} Die${page.die} Blk${page.block} Page${page.page}</td>
+                        <td style="color: var(--success);">有效</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            }
+
+            // Show invalid mappings
+            ssdState.pages.filter(p => p.state === 'invalid' && p.lpa !== null).forEach(page => {
+                const tr = document.createElement('tr');
+                tr.style.opacity = '0.5';
+                tr.innerHTML = `
+                    <td>LPA ${page.lpa}</td>
+                    <td>SB${page.sb} Die${page.die} Blk${page.block} Page${page.page}</td>
+                    <td style="color: var(--page-invalid);">无效</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (tbody.children.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="3" style="text-align: center; opacity: 0.5;">暂无有效映射</td>';
+                tbody.appendChild(tr);
+            }
+        }
+
+        // Reset SSD
+        function resetSSD() {
+            if (confirm('确定要重置SSD吗？这将清除所有数据和历史记录。')) {
+                initSSD();
+                document.getElementById('logContainer').innerHTML = '<div class="log-entry">SSD 已重置</div>';
+            }
+        }
+
+        // Initialize on load
+        window.onload = initSSD;
+    </script>
+</body>
+</html>
