@@ -498,6 +498,45 @@
             pointer-events: auto;
         }
 
+        /* GC触发提示弹窗样式 */
+        .gc-trigger-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .gc-trigger-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .gc-trigger-modal {
+            background: var(--primary);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 480px;
+            width: 90%;
+            text-align: center;
+            border: 2px solid var(--warning);
+        }
+
+        .gc-trigger-modal h3 {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--warning);
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+
         .gc-step-modal {
             background: var(--primary);
             border-radius: 16px;
@@ -676,6 +715,10 @@
                             <div class="label">空闲比例</div>
                             <div class="value" id="freeRatio">100%</div>
                         </div>
+                        <div class="status-item" style="grid-column: span 2;">
+                            <div class="label">GC触发次数</div>
+                            <div class="value" id="gcTriggerCount" style="color: var(--warning);">0</div>
+                        </div>
                     </div>
 
                     <div class="control-section" style="margin-top: 16px;">
@@ -753,6 +796,18 @@
         </div>
     </div>
 
+    <!-- GC触发提示弹窗 -->
+    <div class="gc-trigger-overlay" id="gcTriggerOverlay">
+        <div class="gc-trigger-modal">
+            <h3 id="gcTriggerTitle">GC 触发提示</h3>
+            <div id="gcTriggerDesc" style="margin-bottom: 20px;"></div>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button class="btn btn-warning" onclick="gcTriggerConfirm()">确认执行GC</button>
+                <button class="btn btn-secondary" onclick="gcTriggerCancel()">取消</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // SSD Configuration
         // Structure: 5 Super Blocks
@@ -781,7 +836,8 @@
             sequentialLpa: 1, // LBA起始地址从1开始
             history: [],
             historyIndex: -1,
-            currentPsb: 0 // PSB指针，初始指向第一个super block
+            currentPsb: 0, // PSB指针，初始指向第一个super block
+            gcTriggerCount: 0 // GC触发次数
         };
 
         let gcStepCallback = null;
@@ -795,6 +851,7 @@
             ssdState.history = [];
             ssdState.historyIndex = -1;
             ssdState.currentPsb = 0; // PSB指针初始指向第一个super block
+            ssdState.gcTriggerCount = 0; // GC触发次数清零
 
             // Create 180 pages: 5 Super Blocks, each with 4 Die-Blocks of 9 pages
             // Super Block layout: SB contains 4 Blocks (Block 0 from Die0, Block 0 from Die1, Block 0 from Die2, Block 0 from Die3)
@@ -852,6 +909,7 @@
         }
 
         // 选择最佳PSB（空页最多的psb，如果相同按序号选择）
+        // 包含OP空间，所有SB（0-4）都参与选择
         function selectBestPsb() {
             const psbEmptyCounts = [];
 
@@ -859,7 +917,8 @@
                 const sbPages = getSuperBlockPages(sb);
                 const emptyCount = sbPages.filter(p => p.state === 'empty').length;
                 if (emptyCount > 0) {
-                    psbEmptyCounts.push({sb, emptyCount});
+                    const isOp = sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+                    psbEmptyCounts.push({sb, emptyCount, isOp});
                 }
             }
 
@@ -914,7 +973,8 @@
                 lpaToPpa: new Map(ssdState.lpaToPpa),
                 ppaToLpa: new Map(ssdState.ppaToLpa),
                 sequentialLpa: ssdState.sequentialLpa,
-                currentPsb: ssdState.currentPsb
+                currentPsb: ssdState.currentPsb,
+                gcTriggerCount: ssdState.gcTriggerCount
             };
 
             // Remove future states if we're not at the end
@@ -944,6 +1004,7 @@
                 ssdState.ppaToLpa = new Map(state.ppaToLpa);
                 ssdState.sequentialLpa = state.sequentialLpa;
                 ssdState.currentPsb = state.currentPsb;
+                ssdState.gcTriggerCount = state.gcTriggerCount;
 
                 renderSSD();
                 updateStatus();
@@ -963,6 +1024,7 @@
                 ssdState.ppaToLpa = new Map(state.ppaToLpa);
                 ssdState.sequentialLpa = state.sequentialLpa;
                 ssdState.currentPsb = state.currentPsb;
+                ssdState.gcTriggerCount = state.gcTriggerCount;
 
                 renderSSD();
                 updateStatus();
@@ -981,16 +1043,16 @@
         // Sequential write with unified PSB allocation strategy
         // 写入策略：
         // 1. 初始状态psb指针指向第一个物理super block（SB0）
-        // 2. 以psb为单位，当前psb写满后跳转指向其他物理super block
-        // 3. psb跳转规则：跳转指向空页最多的psb，如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
+        // 2. 按物理顺序写入：SB0 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
+        // 3. 当前psb写满后跳转，指向空页最多的psb（包含OP空间SB4）
+        // 4. 如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
         function sequentialWrite(count) {
             // 检查空白页数量是否低于GC阈值
             const checkAndTriggerGC = () => {
                 const freePagesCount = getFreePagesCount();
                 if (freePagesCount <= CONFIG.gcFreePagesThreshold && getInvalidPagesCount() > 0) {
-                    addLog(`GC触发: 空白页${freePagesCount} <= 阈值${CONFIG.gcFreePagesThreshold}`, 'gc');
-                    // 立即执行GC（不弹窗）
-                    performGCImmediate();
+                    // GC触发时弹窗提示
+                    triggerGCPrompt();
                 }
             };
 
@@ -1009,18 +1071,7 @@
                     continue;
                 }
 
-                // 获取当前空闲页
-                let freePages = getFreePages();
-                if (freePages.length === 0) {
-                    checkAndTriggerGC();
-                    freePages = getFreePages();
-                    if (freePages.length === 0) {
-                        addLog('写入失败: 可用空间不足!', 'gc');
-                        break;
-                    }
-                }
-
-                // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb
+                // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb（包含OP空间SB4）
                 if (isPsbFull(ssdState.currentPsb)) {
                     const bestPsb = selectBestPsb();
                     if (bestPsb === -1) {
@@ -1033,17 +1084,8 @@
                     }
                 }
 
-                // 从当前psb获取第一个空闲页（按page -> die顺序）
+                // 从当前psb获取第一个空闲页（按page 0-8 → die 0-3顺序）
                 let targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
-
-                // 如果当前psb没有空闲页，尝试选择最佳psb
-                if (!targetPage) {
-                    const bestPsb = selectBestPsb();
-                    if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
-                        ssdState.currentPsb = bestPsb;
-                        targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
-                    }
-                }
 
                 if (!targetPage) {
                     addLog(`写入失败: 找不到目标页 LPA ${actualLpa}`, 'gc');
@@ -1077,18 +1119,19 @@
             highlightPages(pagesToWrite.map(p => p.ppa));
         }
 
-        // Random write - LBA是随机的，但存储策略与顺序写完全相同
+        // Random write - LBA是随机的，但物理存储顺序与顺序写相同
         // 写入策略：
         // 1. 初始状态psb指针指向第一个物理super block（SB0）
-        // 2. 以psb为单位，当前psb写满后跳转指向其他物理super block
-        // 3. psb跳转规则：跳转指向空页最多的psb，如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
+        // 2. 按物理顺序写入：SB0 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
+        // 3. 当前psb写满后跳转，指向空页最多的psb（包含OP空间SB4）
+        // 4. 如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
         function randomWrite(count) {
             // 检查空白页数量是否低于GC阈值
             const checkAndTriggerGC = () => {
                 const freePagesCount = getFreePagesCount();
                 if (freePagesCount <= CONFIG.gcFreePagesThreshold && getInvalidPagesCount() > 0) {
-                    addLog(`GC触发: 空白页${freePagesCount} <= 阈值${CONFIG.gcFreePagesThreshold}`, 'gc');
-                    performGCImmediate();
+                    // GC触发时弹窗提示
+                    triggerGCPrompt();
                 }
             };
 
@@ -1121,22 +1164,12 @@
                 }
             }
 
-            // 使用统一的写入策略：按psb指针和空页最多原则
+            // 按物理顺序写入：每个SB按 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
+            // 当当前SB写满后，跳转到空页最多的SB（包含OP空间SB4）
             for (let i = 0; i < lpaList.length; i++) {
                 const lpa = lpaList[i];
 
-                // 获取当前空闲页
-                let freePages = getFreePages();
-                if (freePages.length === 0) {
-                    checkAndTriggerGC();
-                    freePages = getFreePages();
-                    if (freePages.length === 0) {
-                        addLog('写入失败: 可用空间不足!', 'gc');
-                        break;
-                    }
-                }
-
-                // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb
+                // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb（包含OP空间SB4）
                 if (isPsbFull(ssdState.currentPsb)) {
                     const bestPsb = selectBestPsb();
                     if (bestPsb === -1) {
@@ -1149,17 +1182,8 @@
                     }
                 }
 
-                // 从当前psb获取第一个空闲页（按page -> die顺序）
+                // 从当前psb获取第一个空闲页（按page 0-8 → die 0-3顺序）
                 let targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
-
-                // 如果当前psb没有空闲页，尝试选择最佳psb
-                if (!targetPage) {
-                    const bestPsb = selectBestPsb();
-                    if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
-                        ssdState.currentPsb = bestPsb;
-                        targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
-                    }
-                }
 
                 if (!targetPage) {
                     addLog(`写入失败: 找不到目标页 LPA ${lpa}`, 'gc');
@@ -1199,17 +1223,30 @@
         }
 
         // 获取各个PSB的无效页数量（用于GC选择victim）
+        // 包含OP空间，所有SB（0-4）都参与选择
         function getPsbInvalidCounts() {
             const psbCounts = [];
-            for (let sb = 0; sb < CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks; sb++) {
+            for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
                 const sbPages = getSuperBlockPages(sb);
                 const invalidCount = sbPages.filter(p => p.state === 'invalid').length;
                 const validCount = sbPages.filter(p => p.state === 'valid').length;
                 const emptyCount = sbPages.filter(p => p.state === 'empty').length;
-                psbCounts.push({sb, invalidCount, validCount, emptyCount, total: sbPages.length});
+                const isOp = sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+                psbCounts.push({sb, invalidCount, validCount, emptyCount, total: sbPages.length, isOp});
             }
             // 按无效页数量降序排序（GC优先选择无效页最多的SB）
-            psbCounts.sort((a, b) => b.invalidCount - a.invalidCount);
+            // 相同无效页数时，优先选择用户空间SB（非OP）
+            psbCounts.sort((a, b) => {
+                if (b.invalidCount !== a.invalidCount) {
+                    return b.invalidCount - a.invalidCount;
+                }
+                // 相同无效页数时，优先选择用户空间SB
+                if (a.isOp !== b.isOp) {
+                    return a.isOp ? 1 : -1;
+                }
+                // 都为OP或都为用户空间时，按序号选择
+                return a.sb - b.sb;
+            });
             return psbCounts;
         }
 
@@ -1220,9 +1257,74 @@
             return psbCounts.find(p => p.invalidCount > 0);
         }
 
+        // GC触发弹窗提示
+        function triggerGCPrompt() {
+            const freePagesCount = getFreePagesCount();
+            const invalidPagesCount = getInvalidPagesCount();
+
+            // 获取各PSB无效页统计
+            const psbCounts = getPsbInvalidCounts();
+            let sbStats = '';
+            psbCounts.forEach(p => {
+                if (p.invalidCount > 0) {
+                    sbStats += `SB${p.sb}${p.isOp ? '(OP)' : ''}: ${p.invalidCount}个无效页\n`;
+                }
+            });
+
+            // 获取将选中的victim SB
+            const victimSB = selectVictimPsb();
+            const victimIsOp = victimSB ? victimSB.sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks : false;
+
+            // 更新GC次数
+            ssdState.gcTriggerCount++;
+
+            // 显示弹窗
+            document.getElementById('gcTriggerOverlay').classList.add('active');
+
+            // 更新弹窗内容
+            document.getElementById('gcTriggerTitle').textContent = 'GC 触发提示';
+            document.getElementById('gcTriggerDesc').innerHTML = `
+                <div style="text-align: left; line-height: 1.8;">
+                    <div style="color: #ffc107; font-weight: bold; margin-bottom: 10px;">⚠️ SSD需要执行垃圾回收(GC)</div>
+                    <div><strong>触发条件:</strong> 空白页数量(${freePagesCount}) ≤ 阈值(${CONFIG.gcFreePagesThreshold})</div>
+                    <div><strong>无效页数量:</strong> ${invalidPagesCount} 个</div>
+                    <br>
+                    <div><strong>各PSB无效页统计:</strong></div>
+                    <div style="font-family: 'JetBrains Mono'; font-size: 12px; color: #aaa; padding-left: 10px; white-space: pre-line;">${sbStats || '无'}</div>
+                    <br>
+                    <div><strong>GC将选择:</strong> SB${victimSB ? victimSB.sb : 'N/A'}${victimIsOp ? '(OP)' : ''} (无效页最多的SB)</div>
+                    <br>
+                    <div style="color: #4ecca3;">GC执行: 读取有效页 → 擦除 → 写回</div>
+                </div>
+            `;
+
+            // 保存victim信息用于确认后执行
+            window.pendingGCVictim = victimSB;
+        }
+
+        // GC触发弹窗确认执行
+        function gcTriggerConfirm() {
+            document.getElementById('gcTriggerOverlay').classList.remove('active');
+
+            if (window.pendingGCVictim) {
+                addLog(`GC触发: 空白页${getFreePagesCount()} <= 阈值${CONFIG.gcFreePagesThreshold}`, 'gc');
+                showGCSteps(window.pendingGCVictim);
+                window.pendingGCVictim = null;
+            }
+
+            updateStatus();
+        }
+
+        // GC触发弹窗取消
+        function gcTriggerCancel() {
+            document.getElementById('gcTriggerOverlay').classList.remove('active');
+            window.pendingGCVictim = null;
+            addLog('GC: 用户取消GC触发', 'gc');
+        }
+
         // Perform GC (step-by-step with modal)
         function performGC() {
-            // 使用"无效页最多"策略选择victim SB
+            // 使用"无效页最多"策略选择victim SB（包含OP空间）
             const victimSB = selectVictimPsb();
 
             if (!victimSB || victimSB.invalidCount === 0) {
@@ -1232,11 +1334,12 @@
 
             // 显示GC各PSB的无效页统计信息
             const psbCounts = getPsbInvalidCounts();
-            let statsInfo = '各PSB无效页统计: ';
+            let statsInfo = '各PSB无效页统计(含OP): ';
             psbCounts.forEach(p => {
-                statsInfo += `SB${p.sb}:${p.invalidCount} `;
+                statsInfo += `SB${p.sb}${p.isOp ? '(OP)' : ''}:${p.invalidCount} `;
             });
-            addLog(`GC策略: 选择无效页最多的SB → ${statsInfo}`, 'gc');
+            const victimIsOp = victimSB.sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+            addLog(`GC: 选择SB${victimSB.sb}${victimIsOp ? '(OP)' : ''}(无效最多) → ${statsInfo}`, 'gc');
 
             // Show GC step-by-step
             showGCSteps(victimSB);
@@ -1244,7 +1347,7 @@
 
         // Perform GC immediately (no modal)
         function performGCImmediate() {
-            // 使用"无效页最多"策略选择victim SB
+            // 使用"无效页最多"策略选择victim SB（包含OP空间）
             const victimSB = selectVictimPsb();
 
             if (!victimSB || victimSB.invalidCount === 0) {
@@ -1255,7 +1358,8 @@
             const validPages = victimPages.filter(p => p.state === 'valid');
             const invalidPages = victimPages.filter(p => p.state === 'invalid');
 
-            addLog(`GC: 选中SB${victimSB.sb} (无效${victimSB.invalidCount},有效${victimSB.validCount})`, 'gc');
+            const victimIsOp = victimSB.sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+            addLog(`GC: 选中SB${victimSB.sb}${victimIsOp ? '(OP)' : ''} (无效${victimSB.invalidCount},有效${victimSB.validCount})`, 'gc');
 
             // Step 1: Read valid pages to RAM (按指定顺序读取)
             // 顺序: SB Die0 Page0 -> Die1 Page0 -> Die2 Page0 -> Die3 Page0 -> Die0 Page1 -> ...
@@ -1282,7 +1386,7 @@
                 }
             });
 
-            // Step 3: Write back valid pages to the same SB (按写入策略写入)
+            // Step 3: Write back valid pages (按写入策略写入)
             // 使用当前的psb指针策略
             ramData.forEach(data => {
                 // 检查当前psb是否写满，需要跳转
@@ -1300,6 +1404,15 @@
                     ssdState.lpaToPpa.set(data.lpa, targetPage.ppa);
                 }
             });
+
+            // GC完成后，更新psb写入指针指向空页最多的psb（包括OP空间）
+            const bestPsbAfterGC = selectBestPsb();
+            if (bestPsbAfterGC !== -1) {
+                if (bestPsbAfterGC !== ssdState.currentPsb) {
+                    addLog(`PSB指针更新: → SB${bestPsbAfterGC}(空页最多)`, 'gc');
+                }
+                ssdState.currentPsb = bestPsbAfterGC;
+            }
 
             addLog(`GC完成: SB${victimSB.sb}回收, 获得${victimSB.invalidCount}个空页`, 'gc');
         }
@@ -1326,11 +1439,11 @@
 
             document.getElementById('gcOverlay').classList.add('active');
 
-            // 显示各PSB无效页统计
+            // 显示各PSB无效页统计（区分用户空间和OP空间）
             const psbCounts = getPsbInvalidCounts();
-            let psbStatsDesc = '各PSB无效页统计:\n';
+            let psbStatsDesc = '各PSB无效页统计 (含OP空间):\n';
             psbCounts.forEach(p => {
-                psbStatsDesc += `  SB${p.sb}: ${p.invalidCount}个无效页`;
+                psbStatsDesc += `  SB${p.sb}${p.isOp ? '(OP)' : ''}: ${p.invalidCount}个无效页`;
                 if (p.sb === victimSB.sb) psbStatsDesc += ' ← 选择';
                 psbStatsDesc += '\n';
             });
@@ -1350,14 +1463,15 @@
             }
 
             // Step 1: 选择victim SB
+            const victimIsOp = victimSB.sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
             updateStepUI(1, '选择 Victim Super Block',
-                `已选择 Super Block ${victimSB.sb} 作为GC目标\n\n` +
+                `已选择 Super Block ${victimSB.sb}${victimIsOp ? ' (OP空间)' : ''} 作为GC目标\n\n` +
                 `SB${victimSB.sb} 状态:\n` +
                 `  - 无效页: ${victimSB.invalidCount} 个\n` +
                 `  - 有效页: ${victimSB.validCount} 个\n` +
                 `  - 空页: ${victimSB.emptyCount} 个\n\n` +
                 psbStatsDesc +
-                `\nGC策略: 选择无效页最多的SB`);
+                `\nGC策略: 选择无效页最多的SB（OP空间参与选择）`);
 
             // 存储victim信息
             window.gcVictimSB = victimSB;
@@ -1430,7 +1544,7 @@
                         if (isPsbFull(ssdState.currentPsb)) {
                             const bestPsb = selectBestPsb();
                             if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
-                                window.gcWriteTargetPsb = bestPsb;
+                                ssdState.currentPsb = bestPsb;
                             }
                         }
 
@@ -1446,6 +1560,15 @@
 
                 } else if (currentStep > totalSteps) {
                     // Complete
+                    // GC完成后，更新psb写入指针指向空页最多的psb（包括OP空间）
+                    const bestPsbAfterGC = selectBestPsb();
+                    if (bestPsbAfterGC !== -1) {
+                        if (bestPsbAfterGC !== ssdState.currentPsb) {
+                            addLog(`PSB指针更新: → SB${bestPsbAfterGC}(空页最多)`, 'gc');
+                        }
+                        ssdState.currentPsb = bestPsbAfterGC;
+                    }
+
                     document.getElementById('gcOverlay').classList.remove('active');
                     saveState();
                     renderSSD();
@@ -1494,6 +1617,7 @@
             document.getElementById('freePages').textContent = freePages;
             document.getElementById('usedPages').textContent = usedPages;
             document.getElementById('invalidPages').textContent = invalidPages;
+            document.getElementById('gcTriggerCount').textContent = ssdState.gcTriggerCount;
 
             const ratioEl = document.getElementById('freeRatio');
             ratioEl.textContent = freeRatio + '%';
