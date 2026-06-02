@@ -24,7 +24,7 @@
             --page-valid-border: #228B22;
             --page-invalid: #CD853F;
             --page-invalid-border: #8B4513;
-            --page-size: 44px;
+            --page-size: 32px;
         }
 
         body {
@@ -308,10 +308,13 @@
         .blocks-row {
             display: flex;
             gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 8px;
         }
 
         .block {
-            flex: 1;
+            flex: 0 0 auto;
+            width: calc(3 * var(--page-size) + 2 * 3px + 8px);
             display: flex;
             flex-direction: column;
             gap: 4px;
@@ -327,7 +330,8 @@
 
         .pages-grid {
             display: grid;
-            grid-template-columns: repeat(9, var(--page-size));
+            grid-template-columns: repeat(3, var(--page-size));
+            grid-template-rows: repeat(3, var(--page-size));
             gap: 3px;
         }
 
@@ -553,7 +557,7 @@
     <div class="container">
         <header>
             <h1>SSD 垃圾回收（GC）模拟器</h1>
-            <p>可视化演示 NAND Flash 垃圾回收原理 | 4 Die × 5 Block × 9 Page × 5 Super Block</p>
+            <p>可视化演示 NAND Flash 垃圾回收原理 | 5 Super Block × 4 Die × 9 Page | OP空间: 1 SB</p>
         </header>
 
         <div class="main-layout">
@@ -562,19 +566,19 @@
                     <div class="panel-title">SSD 结构概览</div>
                     <div class="status-grid">
                         <div class="status-item">
-                            <div class="label">总 Super Block</div>
-                            <div class="value">5</div>
+                            <div class="label">总页数</div>
+                            <div class="value">180</div>
                         </div>
                         <div class="status-item">
-                            <div class="label">OP 空间</div>
-                            <div class="value">1</div>
+                            <div class="label">用户可用</div>
+                            <div class="value">144</div>
                         </div>
                         <div class="status-item">
-                            <div class="label">用户 Super Block</div>
-                            <div class="value">4</div>
+                            <div class="label">OP预留</div>
+                            <div class="value">36</div>
                         </div>
                         <div class="status-item">
-                            <div class="label">每 Block 页数</div>
+                            <div class="label">每Die页数</div>
                             <div class="value">9</div>
                         </div>
                     </div>
@@ -645,7 +649,7 @@
                             <div class="value" id="usedPages">0</div>
                         </div>
                         <div class="status-item">
-                            <div class="label">可用页数</div>
+                            <div class="label">用户可用页数</div>
                             <div class="value" id="freePages">144</div>
                         </div>
                         <div class="status-item">
@@ -730,15 +734,22 @@
 
     <script>
         // SSD Configuration
+        // Structure: 5 Super Blocks
+        // Each Super Block = 4 Blocks (one per Die)
+        // Each Block = 9 Pages
+        // Total: 5 × 4 × 9 = 180 pages (36 pages per Super Block)
         const CONFIG = {
             dieCount: 4,
-            blocksPerDie: 5,
             pagesPerBlock: 9,
             totalSuperBlocks: 5,
             opSuperBlocks: 1,
             gcThreshold: 0.20,
             maxHistory: 100
         };
+
+        // Derived values
+        CONFIG.pagesPerSuperBlock = CONFIG.dieCount * CONFIG.pagesPerBlock; // 4 × 9 = 36
+        CONFIG.userPages = (CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks) * CONFIG.pagesPerSuperBlock; // 144
 
         // SSD State
         let ssdState = {
@@ -761,22 +772,21 @@
             ssdState.history = [];
             ssdState.historyIndex = -1;
 
-            // Create 180 pages
+            // Create 180 pages: 5 Super Blocks, each with 4 Die-Blocks of 9 pages
+            // Super Block layout: SB contains 4 Blocks (Block 0 from Die0, Block 0 from Die1, Block 0 from Die2, Block 0 from Die3)
             for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
                 for (let die = 0; die < CONFIG.dieCount; die++) {
-                    for (let block = 0; block < CONFIG.blocksPerDie; block++) {
-                        for (let page = 0; page < CONFIG.pagesPerBlock; page++) {
-                            const ppa = ssdState.pages.length;
-                            ssdState.pages.push({
-                                ppa,
-                                sb,
-                                die,
-                                block,
-                                page,
-                                state: 'empty', // empty, valid, invalid
-                                lpa: null
-                            });
-                        }
+                    for (let page = 0; page < CONFIG.pagesPerBlock; page++) {
+                        const ppa = ssdState.pages.length;
+                        ssdState.pages.push({
+                            ppa,
+                            sb,
+                            die,
+                            block: 0, // Each Die contributes 1 Block to the Super Block
+                            page,
+                            state: 'empty', // empty, valid, invalid
+                            lpa: null
+                        });
                     }
                 }
             }
@@ -819,8 +829,7 @@
 
         // Check if GC should be triggered
         function shouldTriggerGC() {
-            const userSuperBlocks = CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
-            const userPages = userSuperBlocks * CONFIG.dieCount * CONFIG.pagesPerBlock;
+            const userPages = CONFIG.userPages; // 144 pages
             const freePages = getFreePagesCount();
             const freeRatio = freePages / userPages;
             return freeRatio < CONFIG.gcThreshold && freePages < 20;
@@ -894,79 +903,21 @@
             document.getElementById('historyPos').textContent = `${ssdState.historyIndex} / ${ssdState.history.length - 1}`;
         }
 
-        // Sequential write
+        // Sequential write with parallel Die interleaving
         function sequentialWrite(count) {
-            if (getFreePagesCount() < count) {
+            const freePages = getFreePages();
+            if (freePages.length < count) {
                 addLog('写入失败: 可用空间不足!', 'gc');
                 return;
             }
 
-            const freePages = getFreePages();
             const lpaStart = ssdState.sequentialLpa;
             const pagesToWrite = [];
 
             for (let i = 0; i < count; i++) {
-                const lpa = (lpaStart + i) % 144; // Max user LPA is 143
+                const lpa = (lpaStart + i) % CONFIG.userPages;
 
-                // Check if this LPA already exists
-                if (ssdState.lpaToPpa.has(lpa)) {
-                    const oldPpa = ssdState.lpaToPpa.get(lpa);
-                    const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
-                    if (oldPage) {
-                        oldPage.state = 'invalid';
-                        ssdState.ppaToLpa.set(oldPpa, lpa); // Mark as invalid
-                    }
-                }
-
-                const freePage = freePages[i];
-                freePage.state = 'valid';
-                freePage.lpa = lpa;
-
-                ssdState.lpaToPpa.set(lpa, freePage.ppa);
-                ssdState.ppaToLpa.delete(freePage.ppa);
-
-                pagesToWrite.push({lpa, ppa: freePage.ppa, die: freePage.die, block: freePage.block});
-            }
-
-            ssdState.sequentialLpa = (lpaStart + count) % 144;
-
-            saveState();
-            renderSSD();
-            updateStatus();
-            updateMappingTable();
-
-            addLog(`顺序写入 ${count} 页: LPA ${lpaStart}→${lpaStart + count - 1}`, 'write');
-            highlightPages(pagesToWrite.map(p => p.ppa));
-
-            if (shouldTriggerGC()) {
-                addLog('触发GC: 空闲容量低于阈值!', 'gc');
-            }
-        }
-
-        // Random write
-        function randomWrite(count) {
-            if (getFreePagesCount() < count) {
-                addLog('写入失败: 可用空间不足!', 'gc');
-                return;
-            }
-
-            const freePages = [...getFreePages()];
-            const pagesToWrite = [];
-            const writtenLpas = new Set();
-
-            for (let i = 0; i < count; i++) {
-                let lpa;
-                let attempts = 0;
-
-                // Try to find an unwritten LPA
-                do {
-                    lpa = Math.floor(Math.random() * 144);
-                    attempts++;
-                } while (writtenLpas.has(lpa) && attempts < 100);
-
-                writtenLpas.add(lpa);
-
-                // Check if this LPA already exists
+                // Invalidate old mapping if exists
                 if (ssdState.lpaToPpa.has(lpa)) {
                     const oldPpa = ssdState.lpaToPpa.get(lpa);
                     const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
@@ -976,23 +927,118 @@
                     }
                 }
 
-                const freePage = freePages[i];
-                freePage.state = 'valid';
-                freePage.lpa = lpa;
+                // Calculate target PPA for parallel Die write
+                // Pattern: within a Super Block, LPAs are interleaved across Dies
+                // LPA 0-3 → SB0 Die0-3 Page0
+                // LPA 4-7 → SB0 Die0-3 Page1
+                // ...
+                // LPA 36-39 → SB1 Die0-3 Page0
+                const posInSuperBlock = lpa % CONFIG.pagesPerSuperBlock;
+                const sb = Math.floor(lpa / CONFIG.pagesPerSuperBlock); // 0-3 for user space
+                const pageInBlock = Math.floor(posInSuperBlock / CONFIG.dieCount);
+                const die = posInSuperBlock % CONFIG.dieCount;
 
-                ssdState.lpaToPpa.set(lpa, freePage.ppa);
-                ssdState.ppaToLpa.delete(freePage.ppa);
+                // Find the target free page
+                const targetPage = freePages.find(p =>
+                    p.sb === sb && p.die === die && p.page === pageInBlock
+                );
 
-                pagesToWrite.push({lpa, ppa: freePage.ppa, die: freePage.die, block: freePage.block});
+                if (!targetPage) {
+                    addLog(`写入失败: 找不到目标页 LPA ${lpa} → SB${sb} Die${die} Page${pageInBlock}`, 'gc');
+                    continue;
+                }
+
+                // Write data
+                targetPage.state = 'valid';
+                targetPage.lpa = lpa;
+
+                ssdState.lpaToPpa.set(lpa, targetPage.ppa);
+                ssdState.ppaToLpa.delete(targetPage.ppa);
+
+                pagesToWrite.push({lpa, ppa: targetPage.ppa, die, sb});
             }
+
+            ssdState.sequentialLpa = (lpaStart + count) % CONFIG.userPages;
 
             saveState();
             renderSSD();
             updateStatus();
             updateMappingTable();
 
+            addLog(`顺序写入 ${count} 页: LPA ${lpaStart}→${(lpaStart + count - 1) % CONFIG.userPages}`, 'write');
+            highlightPages(pagesToWrite.map(p => p.ppa));
+
+            if (shouldTriggerGC()) {
+                addLog('触发GC: 空闲容量低于阈值!', 'gc');
+            }
+        }
+
+        // Random write
+        function randomWrite(count) {
+            const freePages = getFreePages();
+            if (freePages.length < count) {
+                addLog('写入失败: 可用空间不足!', 'gc');
+                return;
+            }
+
+            const pagesToWrite = [];
+            const writtenLpas = new Set();
+
+            for (let i = 0; i < count; i++) {
+                let lpa;
+                let attempts = 0;
+
+                // Try to find an unwritten LPA
+                do {
+                    lpa = Math.floor(Math.random() * CONFIG.userPages);
+                    attempts++;
+                } while (writtenLpas.has(lpa) && attempts < 100);
+
+                writtenLpas.add(lpa);
+
+                // Invalidate old mapping if exists
+                if (ssdState.lpaToPpa.has(lpa)) {
+                    const oldPpa = ssdState.lpaToPpa.get(lpa);
+                    const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
+                    if (oldPage) {
+                        oldPage.state = 'invalid';
+                        ssdState.ppaToLpa.set(oldPpa, lpa);
+                    }
+                }
+
+                // Calculate target PPA for parallel Die write (same as sequential)
+                const posInSuperBlock = lpa % CONFIG.pagesPerSuperBlock;
+                const sb = Math.floor(lpa / CONFIG.pagesPerSuperBlock);
+                const pageInBlock = Math.floor(posInSuperBlock / CONFIG.dieCount);
+                const die = posInSuperBlock % CONFIG.dieCount;
+
+                // Find the target free page
+                const targetPage = freePages.find(p =>
+                    p.sb === sb && p.die === die && p.page === pageInBlock
+                );
+
+                if (!targetPage) {
+                    addLog(`写入失败: 找不到目标页 LPA ${lpa} → SB${sb} Die${die} Page${pageInBlock}`, 'gc');
+                    continue;
+                }
+
+                targetPage.state = 'valid';
+                targetPage.lpa = lpa;
+
+                ssdState.lpaToPpa.set(lpa, targetPage.ppa);
+                ssdState.ppaToLpa.delete(targetPage.ppa);
+
+                pagesToWrite.push({lpa, ppa: targetPage.ppa, die, sb});
+            }
+
             const lpaList = pagesToWrite.map(p => p.lpa).join(', ');
-            addLog(`随机写入 ${count} 页: LPA [${lpaList}]`, 'write');
+            addLog(`随机写入 ${pagesToWrite.length} 页: LPA [${lpaList}]`, 'write');
+
+            saveState();
+            renderSSD();
+            updateStatus();
+            updateMappingTable();
+
             highlightPages(pagesToWrite.map(p => p.ppa));
 
             if (shouldTriggerGC()) {
@@ -1210,7 +1256,7 @@
                     </div>
                     <div class="blocks-row">
                         ${Array.from({length: CONFIG.dieCount}, (_, die) => {
-                            const diePages = sbPages.filter(p => p.die === die);
+                            const diePages = sbPages.filter(p => p.die === die).sort((a, b) => a.page - b.page);
                             return `
                                 <div class="block">
                                     <div class="block-label">Die ${die}</div>
