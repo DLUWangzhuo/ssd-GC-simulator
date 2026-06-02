@@ -780,7 +780,8 @@
             ppaToLpa: new Map(), // PPA -> LPA mapping (for invalidation)
             sequentialLpa: 1, // LBA起始地址从1开始
             history: [],
-            historyIndex: -1
+            historyIndex: -1,
+            currentPsb: 0 // PSB指针，初始指向第一个super block
         };
 
         let gcStepCallback = null;
@@ -793,6 +794,7 @@
             ssdState.sequentialLpa = 1; // LBA起始地址从1开始
             ssdState.history = [];
             ssdState.historyIndex = -1;
+            ssdState.currentPsb = 0; // PSB指针初始指向第一个super block
 
             // Create 180 pages: 5 Super Blocks, each with 4 Die-Blocks of 9 pages
             // Super Block layout: SB contains 4 Blocks (Block 0 from Die0, Block 0 from Die1, Block 0 from Die2, Block 0 from Die3)
@@ -849,6 +851,54 @@
             return getInvalidPages().length;
         }
 
+        // 选择最佳PSB（空页最多的psb，如果相同按序号选择）
+        function selectBestPsb() {
+            const psbEmptyCounts = [];
+
+            for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
+                const sbPages = getSuperBlockPages(sb);
+                const emptyCount = sbPages.filter(p => p.state === 'empty').length;
+                if (emptyCount > 0) {
+                    psbEmptyCounts.push({sb, emptyCount});
+                }
+            }
+
+            if (psbEmptyCounts.length === 0) {
+                return -1; // 没有空闲空间
+            }
+
+            // 按空页数降序排序，相同时按sb序号升序（优先级：SB0 > SB1 > SB2...）
+            psbEmptyCounts.sort((a, b) => {
+                if (b.emptyCount !== a.emptyCount) {
+                    return b.emptyCount - a.emptyCount;
+                }
+                return a.sb - b.sb; // 序号小的排前面
+            });
+
+            return psbEmptyCounts[0].sb;
+        }
+
+        // 获取指定PSB中可写入的空闲页
+        // 按page(0-8) -> die(0-3)的顺序返回第一个可用页
+        function getFirstFreePageInPsb(sb) {
+            const sbPages = getSuperBlockPages(sb).filter(p => p.state === 'empty');
+            if (sbPages.length === 0) return null;
+
+            // 按page(0-8) -> die(0-3)排序
+            sbPages.sort((a, b) => {
+                if (a.page !== b.page) return a.page - b.page;
+                return a.die - b.die;
+            });
+
+            return sbPages[0];
+        }
+
+        // 检查当前psb是否已写满
+        function isPsbFull(sb) {
+            const sbPages = getSuperBlockPages(sb);
+            return sbPages.every(p => p.state !== 'empty');
+        }
+
         // Check if GC should be triggered
         function shouldTriggerGC() {
             const userPages = CONFIG.userPages; // 144 pages
@@ -863,7 +913,8 @@
                 pages: ssdState.pages.map(p => ({...p})),
                 lpaToPpa: new Map(ssdState.lpaToPpa),
                 ppaToLpa: new Map(ssdState.ppaToLpa),
-                sequentialLpa: ssdState.sequentialLpa
+                sequentialLpa: ssdState.sequentialLpa,
+                currentPsb: ssdState.currentPsb
             };
 
             // Remove future states if we're not at the end
@@ -892,6 +943,7 @@
                 ssdState.lpaToPpa = new Map(state.lpaToPpa);
                 ssdState.ppaToLpa = new Map(state.ppaToLpa);
                 ssdState.sequentialLpa = state.sequentialLpa;
+                ssdState.currentPsb = state.currentPsb;
 
                 renderSSD();
                 updateStatus();
@@ -910,6 +962,7 @@
                 ssdState.lpaToPpa = new Map(state.lpaToPpa);
                 ssdState.ppaToLpa = new Map(state.ppaToLpa);
                 ssdState.sequentialLpa = state.sequentialLpa;
+                ssdState.currentPsb = state.currentPsb;
 
                 renderSSD();
                 updateStatus();
@@ -925,9 +978,11 @@
             document.getElementById('historyPos').textContent = `${ssdState.historyIndex} / ${ssdState.history.length - 1}`;
         }
 
-        // Sequential write with parallel Die interleaving
-        // 核心逻辑：按super block的page位置(0-35)依次写入
-        // LPA N 对应 posInSuperBlock = (N-1) % 36, die = (N-1) % 4
+        // Sequential write with unified PSB allocation strategy
+        // 写入策略：
+        // 1. 初始状态psb指针指向第一个物理super block（SB0）
+        // 2. 以psb为单位，当前psb写满后跳转指向其他物理super block
+        // 3. psb跳转规则：跳转指向空页最多的psb，如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
         function sequentialWrite(count) {
             // 检查空白页数量是否低于GC阈值
             const checkAndTriggerGC = () => {
@@ -944,7 +999,6 @@
             const pagesToWrite = [];
 
             // 顺序写：按LPA依次写入
-            // LPA N -> posInSuperBlock = (N-1) % 36, die = (N-1) % 4
             while (totalWritten < count) {
                 const actualLpa = lpaStart + totalWritten;
                 if (actualLpa > CONFIG.userPages) break;
@@ -954,11 +1008,6 @@
                     totalWritten++;
                     continue;
                 }
-
-                // 计算当前LPA在super block中的位置
-                const posInSuperBlock = (actualLpa - 1) % CONFIG.pagesPerSuperBlock;
-                const pageInBlock = Math.floor(posInSuperBlock / CONFIG.dieCount); // 0-8
-                const die = posInSuperBlock % CONFIG.dieCount; // 0-3
 
                 // 获取当前空闲页
                 let freePages = getFreePages();
@@ -971,23 +1020,29 @@
                     }
                 }
 
-                // 查找第一个有空闲位置的SB
-                // 按SB顺序查找：用户空间SB 0-3，然后OP空间SB 4
-                let targetPage = null;
-                for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
-                    const pageInSb = freePages.find(p =>
-                        p.sb === sb && p.die === die && p.page === pageInBlock && p.state === 'empty'
-                    );
-                    if (pageInSb) {
-                        targetPage = pageInSb;
+                // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb
+                if (isPsbFull(ssdState.currentPsb)) {
+                    const bestPsb = selectBestPsb();
+                    if (bestPsb === -1) {
+                        addLog('写入失败: 可用空间不足!', 'gc');
                         break;
+                    }
+                    if (bestPsb !== ssdState.currentPsb) {
+                        addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}`, 'write');
+                        ssdState.currentPsb = bestPsb;
                     }
                 }
 
-                // 如果找不到对应位置，选择第一个空闲页（fallback）
+                // 从当前psb获取第一个空闲页（按page -> die顺序）
+                let targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
+
+                // 如果当前psb没有空闲页，尝试选择最佳psb
                 if (!targetPage) {
-                    const sortedFree = [...freePages].sort((a, b) => a.ppa - b.ppa);
-                    targetPage = sortedFree.find(p => p.state === 'empty');
+                    const bestPsb = selectBestPsb();
+                    if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
+                        ssdState.currentPsb = bestPsb;
+                        targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
+                    }
                 }
 
                 if (!targetPage) {
@@ -1022,12 +1077,11 @@
             highlightPages(pagesToWrite.map(p => p.ppa));
         }
 
-        // Random write - LBA是随机的，但存储按super block并行顺序写入
-        // 正确的物理super block填充顺序：
-        // SB0 Die0 Page0 -> SB0 Die1 Page0 -> SB0 Die2 Page0 -> SB0 Die3 Page0 ->
-        // SB0 Die0 Page1 -> SB0 Die1 Page1 -> SB0 Die2 Page1 -> SB0 Die3 Page1 ->
-        // ... -> SB0写满 ->
-        // SB1 Die0 Page0 -> SB1 Die1 Page0 -> ... -> SB1写满 -> ...
+        // Random write - LBA是随机的，但存储策略与顺序写完全相同
+        // 写入策略：
+        // 1. 初始状态psb指针指向第一个物理super block（SB0）
+        // 2. 以psb为单位，当前psb写满后跳转指向其他物理super block
+        // 3. psb跳转规则：跳转指向空页最多的psb，如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
         function randomWrite(count) {
             // 检查空白页数量是否低于GC阈值
             const checkAndTriggerGC = () => {
@@ -1039,11 +1093,9 @@
             };
 
             const pagesToWrite = [];
-            const usedPages = new Set(); // 记录已使用的页PPA
             let overwriteCount = 0; // 统计覆写次数
 
             // 生成随机LPA列表（允许重复，实现覆写场景）
-            // 每次随机选一个LPA（可能是已映射的LPA，触发覆写）
             const lpaList = [];
             for (let i = 0; i < count; i++) {
                 const lpa = Math.floor(Math.random() * CONFIG.userPages) + 1;
@@ -1056,7 +1108,6 @@
             }
 
             // 预处理：Invalidate所有待写LPA的旧映射（处理覆写场景）
-            // 使用Set去重，避免对同一个LPA多次Invalidate
             const uniqueLpas = new Set(lpaList);
             for (const lpa of uniqueLpas) {
                 if (ssdState.lpaToPpa.has(lpa)) {
@@ -1070,59 +1121,60 @@
                 }
             }
 
-            // 按super block并行顺序遍历：SB → Page → Die
-            // 正确的填充顺序：同一Page位置的所有Die并行写入
-            // SB0 Die0 Page0 -> SB0 Die1 Page0 -> SB0 Die2 Page0 -> SB0 Die3 Page0 ->
-            // SB0 Die0 Page1 -> SB0 Die1 Page1 -> SB0 Die2 Page1 -> SB0 Die3 Page1 ->
-            // ... -> SB0写满 ->
-            // SB1 Die0 Page0 -> SB1 Die1 Page0 -> ...
-            let lpaIndex = 0; // 用于从随机LPA池中取LPA
-            for (let sb = 0; sb < CONFIG.totalSuperBlocks && lpaIndex < lpaList.length; sb++) {
-                for (let pageInBlock = 0; pageInBlock < CONFIG.pagesPerBlock && lpaIndex < lpaList.length; pageInBlock++) {
-                    // 同一Page位置，遍历所有Die（Die间并行）
-                    for (let die = 0; die < CONFIG.dieCount && lpaIndex < lpaList.length; die++) {
-                        let freePages = getFreePages();
-                        if (freePages.length === 0) {
-                            checkAndTriggerGC();
-                            freePages = getFreePages();
-                            if (freePages.length === 0) break;
-                        }
+            // 使用统一的写入策略：按psb指针和空页最多原则
+            for (let i = 0; i < lpaList.length; i++) {
+                const lpa = lpaList[i];
 
-                        // 查找该物理位置是否有空闲页（精确位置匹配）
-                        let targetPage = freePages.find(p =>
-                            p.sb === sb && p.die === die && p.page === pageInBlock &&
-                            p.state === 'empty' && !usedPages.has(p.ppa)
-                        );
-
-                        // 如果精确位置找不到，同Page位置内其他Die fallback
-                        if (!targetPage) {
-                            // 在同一Page位置内找其他Die的空闲页
-                            const otherDieFree = freePages.find(p =>
-                                p.sb === sb && p.page === pageInBlock &&
-                                p.die !== die &&
-                                p.state === 'empty' && !usedPages.has(p.ppa)
-                            );
-                            if (otherDieFree) {
-                                targetPage = otherDieFree;
-                            }
-                        }
-
-                        if (targetPage && lpaIndex < lpaList.length) {
-                            const lpa = lpaList[lpaIndex];
-                            lpaIndex++;
-
-                            usedPages.add(targetPage.ppa);
-                            targetPage.state = 'valid';
-                            targetPage.lpa = lpa;
-                            ssdState.lpaToPpa.set(lpa, targetPage.ppa);
-
-                            pagesToWrite.push({lpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
-
-                            // 检查是否需要触发GC
-                            checkAndTriggerGC();
-                        }
+                // 获取当前空闲页
+                let freePages = getFreePages();
+                if (freePages.length === 0) {
+                    checkAndTriggerGC();
+                    freePages = getFreePages();
+                    if (freePages.length === 0) {
+                        addLog('写入失败: 可用空间不足!', 'gc');
+                        break;
                     }
                 }
+
+                // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb
+                if (isPsbFull(ssdState.currentPsb)) {
+                    const bestPsb = selectBestPsb();
+                    if (bestPsb === -1) {
+                        addLog('写入失败: 可用空间不足!', 'gc');
+                        break;
+                    }
+                    if (bestPsb !== ssdState.currentPsb) {
+                        addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}`, 'write');
+                        ssdState.currentPsb = bestPsb;
+                    }
+                }
+
+                // 从当前psb获取第一个空闲页（按page -> die顺序）
+                let targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
+
+                // 如果当前psb没有空闲页，尝试选择最佳psb
+                if (!targetPage) {
+                    const bestPsb = selectBestPsb();
+                    if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
+                        ssdState.currentPsb = bestPsb;
+                        targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
+                    }
+                }
+
+                if (!targetPage) {
+                    addLog(`写入失败: 找不到目标页 LPA ${lpa}`, 'gc');
+                    continue;
+                }
+
+                // 写入数据
+                targetPage.state = 'valid';
+                targetPage.lpa = lpa;
+                ssdState.lpaToPpa.set(lpa, targetPage.ppa);
+
+                pagesToWrite.push({lpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
+
+                // 检查是否需要触发GC
+                checkAndTriggerGC();
             }
 
             addLog(`随机写入 ${pagesToWrite.length} 页${overwriteCount > 0 ? ` (覆写${overwriteCount}个)` : ''}: LBA随机${overwriteCount > 0 ? ', 旧页已invalidate' : ''}`, 'write');
@@ -1146,25 +1198,45 @@
             performGC();
         }
 
-        // Perform GC (step-by-step with modal)
-        function performGC() {
-            // Find the Super Block with most invalid pages
-            const sbInvalidCounts = [];
+        // 获取各个PSB的无效页数量（用于GC选择victim）
+        function getPsbInvalidCounts() {
+            const psbCounts = [];
             for (let sb = 0; sb < CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks; sb++) {
                 const sbPages = getSuperBlockPages(sb);
                 const invalidCount = sbPages.filter(p => p.state === 'invalid').length;
                 const validCount = sbPages.filter(p => p.state === 'valid').length;
-                sbInvalidCounts.push({sb, invalidCount, validCount, total: sbPages.length});
+                const emptyCount = sbPages.filter(p => p.state === 'empty').length;
+                psbCounts.push({sb, invalidCount, validCount, emptyCount, total: sbPages.length});
             }
+            // 按无效页数量降序排序（GC优先选择无效页最多的SB）
+            psbCounts.sort((a, b) => b.invalidCount - a.invalidCount);
+            return psbCounts;
+        }
 
-            // Sort by invalid count descending
-            sbInvalidCounts.sort((a, b) => b.invalidCount - a.invalidCount);
-            const victimSB = sbInvalidCounts[0];
+        // 选择GC victim SB（无效页最多的SB）
+        function selectVictimPsb() {
+            const psbCounts = getPsbInvalidCounts();
+            // 返回无效页数量最多的SB
+            return psbCounts.find(p => p.invalidCount > 0);
+        }
 
-            if (victimSB.invalidCount === 0) {
+        // Perform GC (step-by-step with modal)
+        function performGC() {
+            // 使用"无效页最多"策略选择victim SB
+            const victimSB = selectVictimPsb();
+
+            if (!victimSB || victimSB.invalidCount === 0) {
                 addLog('GC: 无需回收，所有块均无可回收空间', 'gc');
                 return;
             }
+
+            // 显示GC各PSB的无效页统计信息
+            const psbCounts = getPsbInvalidCounts();
+            let statsInfo = '各PSB无效页统计: ';
+            psbCounts.forEach(p => {
+                statsInfo += `SB${p.sb}:${p.invalidCount} `;
+            });
+            addLog(`GC策略: 选择无效页最多的SB → ${statsInfo}`, 'gc');
 
             // Show GC step-by-step
             showGCSteps(victimSB);
@@ -1172,33 +1244,30 @@
 
         // Perform GC immediately (no modal)
         function performGCImmediate() {
-            // Find the Super Block with most invalid pages in user space
-            const sbInvalidCounts = [];
-            for (let sb = 0; sb < CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks; sb++) {
-                const sbPages = getSuperBlockPages(sb);
-                const invalidCount = sbPages.filter(p => p.state === 'invalid').length;
-                const validCount = sbPages.filter(p => p.state === 'valid').length;
-                if (invalidCount > 0) {
-                    sbInvalidCounts.push({sb, invalidCount, validCount, total: sbPages.length});
-                }
-            }
+            // 使用"无效页最多"策略选择victim SB
+            const victimSB = selectVictimPsb();
 
-            if (sbInvalidCounts.length === 0) {
+            if (!victimSB || victimSB.invalidCount === 0) {
                 return; // No SB to reclaim
             }
 
-            // Sort by invalid count descending and pick the victim
-            sbInvalidCounts.sort((a, b) => b.invalidCount - a.invalidCount);
-            const victimSB = sbInvalidCounts[0];
             const victimPages = getSuperBlockPages(victimSB.sb);
             const validPages = victimPages.filter(p => p.state === 'valid');
             const invalidPages = victimPages.filter(p => p.state === 'invalid');
 
             addLog(`GC: 选中SB${victimSB.sb} (无效${victimSB.invalidCount},有效${victimSB.validCount})`, 'gc');
 
-            // Step 1: Read valid pages to RAM (parallel read)
-            // 保存有效页数据用于写回
-            const ramData = validPages.map(p => ({lpa: p.lpa, die: p.die, page: p.page}));
+            // Step 1: Read valid pages to RAM (按指定顺序读取)
+            // 顺序: SB Die0 Page0 -> Die1 Page0 -> Die2 Page0 -> Die3 Page0 -> Die0 Page1 -> ...
+            const ramData = [];
+            for (let page = 0; page < CONFIG.pagesPerBlock; page++) {
+                for (let die = 0; die < CONFIG.dieCount; die++) {
+                    const pageData = validPages.find(p => p.page === page && p.die === die);
+                    if (pageData) {
+                        ramData.push({lpa: pageData.lpa, die: pageData.die, page: pageData.page});
+                    }
+                }
+            }
 
             // Step 2: Erase Super Block
             victimPages.forEach(page => {
@@ -1213,11 +1282,18 @@
                 }
             });
 
-            // Step 3: Write back valid pages to the same SB (parallel write)
+            // Step 3: Write back valid pages to the same SB (按写入策略写入)
+            // 使用当前的psb指针策略
             ramData.forEach(data => {
-                const targetPage = victimPages.find(p =>
-                    p.die === data.die && p.page === data.page
-                );
+                // 检查当前psb是否写满，需要跳转
+                if (isPsbFull(ssdState.currentPsb)) {
+                    const bestPsb = selectBestPsb();
+                    if (bestPsb !== -1) {
+                        ssdState.currentPsb = bestPsb;
+                    }
+                }
+
+                const targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
                 if (targetPage) {
                     targetPage.state = 'valid';
                     targetPage.lpa = data.lpa;
@@ -1228,29 +1304,36 @@
             addLog(`GC完成: SB${victimSB.sb}回收, 获得${victimSB.invalidCount}个空页`, 'gc');
         }
 
-        // Show GC steps
+        // Show GC steps (4-step GC process with modal)
         function showGCSteps(victimSB) {
             const victimPages = getSuperBlockPages(victimSB.sb);
             const validPages = victimPages.filter(p => p.state === 'valid');
             const invalidPages = victimPages.filter(p => p.state === 'invalid');
 
-            // 按Die和Page组织有效页，用于并行读写演示
-            // 每个Page级别（Page0-Page8）可以并行读取4个Die的有效页
-            const validPagesByPage = [];
+            // 按读取顺序组织有效页: Die0 Page0 -> Die1 Page0 -> Die2 Page0 -> Die3 Page0 -> Die0 Page1 -> ...
+            const ramData = [];
             for (let page = 0; page < CONFIG.pagesPerBlock; page++) {
-                const pageGroup = validPages.filter(p => p.page === page);
-                if (pageGroup.length > 0) {
-                    validPagesByPage.push({page, pages: pageGroup});
+                for (let die = 0; die < CONFIG.dieCount; die++) {
+                    const pageData = validPages.find(p => p.page === page && p.die === die);
+                    if (pageData) {
+                        ramData.push({lpa: pageData.lpa, die: pageData.die, page: pageData.page});
+                    }
                 }
             }
 
-            let currentStep = 0;
-            // 步骤: 1选择victim -> 2并行读RAM -> 3擦除 -> 4并行写回
-            const totalSteps = validPages.length > 0 ? 4 : 2;
-
-            gcStepCallback = null;
+            let currentStep = 1;
+            const totalSteps = 4;
 
             document.getElementById('gcOverlay').classList.add('active');
+
+            // 显示各PSB无效页统计
+            const psbCounts = getPsbInvalidCounts();
+            let psbStatsDesc = '各PSB无效页统计:\n';
+            psbCounts.forEach(p => {
+                psbStatsDesc += `  SB${p.sb}: ${p.invalidCount}个无效页`;
+                if (p.sb === victimSB.sb) psbStatsDesc += ' ← 选择';
+                psbStatsDesc += '\n';
+            });
 
             function updateStepUI(step, title, desc) {
                 document.getElementById('gcStepTitle').textContent = title;
@@ -1266,30 +1349,36 @@
                 }
             }
 
+            // Step 1: 选择victim SB
             updateStepUI(1, '选择 Victim Super Block',
-                `已选择 Super Block ${victimSB.sb} 作为回收目标\n` +
-                `该块包含 ${victimSB.invalidCount} 个无效页, ${victimSB.validCount} 个有效页\n` +
-                `GC策略: 并行读有效页→擦除→并行写回原SB`);
+                `已选择 Super Block ${victimSB.sb} 作为GC目标\n\n` +
+                `SB${victimSB.sb} 状态:\n` +
+                `  - 无效页: ${victimSB.invalidCount} 个\n` +
+                `  - 有效页: ${victimSB.validCount} 个\n` +
+                `  - 空页: ${victimSB.emptyCount} 个\n\n` +
+                psbStatsDesc +
+                `\nGC策略: 选择无效页最多的SB`);
+
+            // 存储victim信息
+            window.gcVictimSB = victimSB;
+            window.gcVictimPages = victimPages;
+            window.gcRamData = ramData;
+            window.gcCurrentRamIndex = 0;
 
             window.gcStepNext = function() {
                 currentStep++;
 
                 if (currentStep === 2) {
-                    // Step 2: Parallel read valid pages to RAM
-                    let ramDesc = `正在并行读取有效页到RAM...\n`;
-                    if (validPagesByPage.length > 0) {
-                        const firstGroup = validPagesByPage[0];
-                        ramDesc += `Page${firstGroup.page}: `;
-                        ramDesc += firstGroup.pages.map(p => `Die${p.die}:LPA${p.lpa}`).join(', ');
-                        if (validPagesByPage.length > 1) {
-                            ramDesc += `\n...共 ${validPages.length} 个有效页`;
-                        }
-                    }
-                    updateStepUI(2, '并行读取到RAM',
-                        ramDesc);
-
-                    // 记录RAM中的数据用于后续写回
-                    window.gcRamData = validPages.map(p => ({lpa: p.lpa, die: p.die, page: p.page}));
+                    // Step 2: 读取有效页到RAM（按指定顺序）
+                    updateStepUI(2, '① 读取有效页到RAM',
+                        `正在读取SB${victimSB.sb}的有效页到RAM...\n\n` +
+                        `读取顺序:\n` +
+                        `  SB${victimSB.sb} Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0\n` +
+                        `  SB${victimSB.sb} Die0 Page1 → Die1 Page1 → Die2 Page1 → Die3 Page1\n` +
+                        `  ... (无效页跳过)\n\n` +
+                        `有效页列表:\n` +
+                        ramData.slice(0, 5).map(d => `  SB${victimSB.sb} Die${d.die} Page${d.page} → LPA${d.lpa}`).join('\n') +
+                        (ramData.length > 5 ? `\n  ... 共 ${ramData.length} 个有效页` : ''));
 
                     // 将victim SB的有效页标记为"已读取"状态
                     validPages.forEach(page => {
@@ -1297,11 +1386,16 @@
                     });
 
                 } else if (currentStep === 3) {
-                    // Step 3: Erase Super Block
-                    updateStepUI(3, '擦除 Super Block',
-                        `正在擦除 Super Block ${victimSB.sb}...\n` +
-                        `所有 ${victimSB.total} 个页已重置为空\n` +
-                        `数据暂存于RAM，等待写回`);
+                    // Step 3: 清空GC目标psb
+                    updateStepUI(3, '② 清空GC目标PSB',
+                        `正在清空 Super Block ${victimSB.sb}...\n\n` +
+                        `操作:\n` +
+                        `  - 擦除所有 ${victimSB.total} 个页\n` +
+                        `  - ${victimSB.invalidCount} 个无效页被释放\n` +
+                        `  - ${victimSB.validCount} 个有效页数据暂存于RAM\n\n` +
+                        `清理映射表:\n` +
+                        `  - 移除 ${victimSB.invalidCount} 个无效LPA映射\n\n` +
+                        `等待数据写回...`);
 
                     // 清除victim SB所有页
                     victimPages.forEach(page => {
@@ -1316,37 +1410,39 @@
                         }
                     });
 
-                } else if (currentStep === 4) {
-                    // Step 4: Parallel write valid pages back to the same SB
-                    let writeDesc = `正在并行写回有效页到SB${victimSB.sb}...\n`;
-                    if (window.gcRamData && window.gcRamData.length > 0) {
-                        // 按Die分组显示写回信息
-                        const dieGroups = {};
-                        window.gcRamData.forEach(data => {
-                            if (!dieGroups[data.die]) dieGroups[data.die] = [];
-                            dieGroups[data.die].push(data.page);
-                        });
-                        Object.keys(dieGroups).sort().forEach(die => {
-                            writeDesc += `Die${die}: Page${dieGroups[die].join(',')}\n`;
-                        });
-                    }
-                    updateStepUI(4, '并行写回 Super Block',
-                        writeDesc);
+                    // 设置写入psb指针（初始指向victim SB）
+                    window.gcWriteTargetPsb = victimSB.sb;
 
-                    // 实际写回数据到victim SB
-                    if (window.gcRamData) {
-                        window.gcRamData.forEach(data => {
-                            const targetPage = victimPages.find(p =>
-                                p.die === data.die && p.page === data.page
-                            );
-                            if (targetPage) {
-                                targetPage.state = 'valid';
-                                targetPage.lpa = data.lpa;
-                                ssdState.lpaToPpa.set(data.lpa, targetPage.ppa);
+                } else if (currentStep === 4) {
+                    // Step 4: 按照写入策略将RAM数据写回
+                    updateStepUI(4, '③ 写入策略写回数据',
+                        `正在按照写入策略将RAM数据写回...\n\n` +
+                        `写入策略:\n` +
+                        `  1. 检查当前PSB是否写满\n` +
+                        `  2. 跳转到空页最多的PSB\n` +
+                        `  3. 按page→die顺序写入\n\n` +
+                        `写回目标: SB${window.gcWriteTargetPsb}\n` +
+                        `待写回: ${window.gcRamData.length} 个有效页`);
+
+                    // 执行写入（按照写入策略）
+                    window.gcRamData.forEach(data => {
+                        // 检查当前psb是否写满，需要跳转
+                        if (isPsbFull(ssdState.currentPsb)) {
+                            const bestPsb = selectBestPsb();
+                            if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
+                                window.gcWriteTargetPsb = bestPsb;
                             }
-                        });
-                        window.gcRamData = null;
-                    }
+                        }
+
+                        const targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
+                        if (targetPage) {
+                            targetPage.state = 'valid';
+                            targetPage.lpa = data.lpa;
+                            ssdState.lpaToPpa.set(data.lpa, targetPage.ppa);
+                        }
+                    });
+
+                    window.gcRamData = null;
 
                 } else if (currentStep > totalSteps) {
                     // Complete
@@ -1355,7 +1451,7 @@
                     renderSSD();
                     updateStatus();
                     updateMappingTable();
-                    addLog(`GC完成: SB${victimSB.sb}并行读写回收, 获得 ${victimSB.total} 个空页`, 'gc');
+                    addLog(`GC完成: SB${victimSB.sb}回收, 获得${victimSB.invalidCount}个空页`, 'gc');
                     return;
                 }
             };
