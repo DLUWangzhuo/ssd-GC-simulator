@@ -124,10 +124,19 @@ function sequentialWrite(count) {
 
     ssdState.sequentialLpa = currentLpa > CONFIG.userPages ? 1 : currentLpa;
 
+    // 更新被写入物理block（SB + Die组合）的写入计数器（用于计算write age）
+    // 只有写入valid页才算写入动作
+    const writtenBlocks = new Set(pagesToWrite.map(p => `${p.sb}_${p.die}`));
+    writtenBlocks.forEach(blockKey => {
+        const [sb, die] = blockKey.split('_').map(Number);
+        state.updateBlockWriteCounter(sb, die);
+    });
+
     state.saveState();
     window.SSDSimulator.renderer.renderSSD();
     utils.updateStatus();
     window.SSDSimulator.renderer.updateMappingTable();
+    window.SSDSimulator.renderer.updateBlockStatsPanel();
 
     utils.addLog(`顺序写入 ${totalWritten} 页: LPA ${lpaStart}→${lpaStart + totalWritten - 1}`, 'write');
     utils.highlightPages(pagesToWrite.map(p => p.ppa));
@@ -232,10 +241,19 @@ function randomWrite(count) {
 
     utils.addLog(`随机写入 ${pagesToWrite.length} 页${overwriteCount > 0 ? ` (覆写${overwriteCount}个)` : ''}: LBA随机${overwriteCount > 0 ? ', 旧页已invalidate' : ''}`, 'write');
 
+    // 更新被写入物理block（SB + Die组合）的写入计数器（用于计算write age）
+    // 只有写入valid页才算写入动作
+    const writtenBlocks = new Set(pagesToWrite.map(p => `${p.sb}_${p.die}`));
+    writtenBlocks.forEach(blockKey => {
+        const [sb, die] = blockKey.split('_').map(Number);
+        state.updateBlockWriteCounter(sb, die);
+    });
+
     state.saveState();
     window.SSDSimulator.renderer.renderSSD();
     utils.updateStatus();
     window.SSDSimulator.renderer.updateMappingTable();
+    window.SSDSimulator.renderer.updateBlockStatsPanel();
 
     utils.highlightPages(pagesToWrite.map(p => p.ppa));
 }

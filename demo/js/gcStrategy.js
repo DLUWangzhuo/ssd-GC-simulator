@@ -367,6 +367,9 @@ function showGCSteps(victimSB) {
                 `写回目标: SB${window.gcWriteTargetPsb}\n` +
                 `待写回: ${window.gcRamData.length} 个有效页`);
 
+            // 记录GC写回涉及的物理block（SB + Die组合）集合（用于更新write age）
+            const gcWrittenBlocks = new Set();
+
             // 执行写入（按照写入策略）
             window.gcRamData.forEach(data => {
                 // 检查当前psb是否写满，需要跳转
@@ -382,7 +385,15 @@ function showGCSteps(victimSB) {
                     targetPage.state = 'valid';
                     targetPage.lpa = data.lpa;
                     ssdState.lpaToPpa.set(data.lpa, targetPage.ppa);
+                    // 按物理block（SB + Die）记录
+                    gcWrittenBlocks.add(`${targetPage.sb}_${targetPage.die}`);
                 }
+            });
+
+            // 更新GC写回涉及物理block的写入计数器
+            gcWrittenBlocks.forEach(blockKey => {
+                const [sb, die] = blockKey.split('_').map(Number);
+                state.updateBlockWriteCounter(sb, die);
             });
 
             window.gcRamData = null;
@@ -407,6 +418,7 @@ function showGCSteps(victimSB) {
             window.SSDSimulator.renderer.renderSSD();
             utils.updateStatus();
             window.SSDSimulator.renderer.updateMappingTable();
+            window.SSDSimulator.renderer.updateBlockStatsPanel();
             utils.addLog(`GC完成: SB${victimSB.sb}回收, 获得${victimSB.invalidCount}个空页`, 'gc');
             return;
         }

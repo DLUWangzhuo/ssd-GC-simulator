@@ -98,8 +98,110 @@ function updateMappingTable() {
     }
 }
 
+/**
+ * 更新Block Write Age统计面板
+ * 按物理block（SB + Die）渲染柱状图
+ * 每个柱子：灰色(下方)=有效页，红色(上方)=无效页
+ */
+function updateBlockStatsPanel() {
+    const { state } = window.SSDSimulator;
+    const chartContainer = document.getElementById('blockStatsChart');
+    if (!chartContainer) return;
+
+    const stats = state.getBlockStats();
+
+    // 清空容器
+    chartContainer.innerHTML = '';
+
+    // 创建带Y轴的容器
+    const chartWithAxis = document.createElement('div');
+    chartWithAxis.className = 'stats-chart-with-axis';
+
+    // 渲染Y轴标签
+    const yAxisContainer = document.createElement('div');
+    yAxisContainer.className = 'stats-y-axis';
+    yAxisContainer.innerHTML = `
+        <span>100%</span>
+        <span>75%</span>
+        <span>50%</span>
+        <span>25%</span>
+        <span>0%</span>
+    `;
+
+    // 渲染柱状图区域（横向滚动，不换行）
+    const barsContainer = document.createElement('div');
+    barsContainer.className = 'stats-bars-scroll-container';
+
+    // 渲染柱状图
+    stats.forEach(stat => {
+        const barContainer = document.createElement('div');
+        barContainer.className = 'stats-bar-container';
+
+        // 柱状图（包含有效和无效两部分）
+        const barWrapper = document.createElement('div');
+        barWrapper.className = 'stats-bar-wrapper';
+
+        // 计算有效和无效高度百分比
+        const validHeight = (stat.validPercent / 100) * 120;
+        // 正确计算无效页占比
+        const invalidCount = stat.totalCount - stat.validCount;
+        const invalidPercent = (invalidCount / stat.totalCount) * 100;
+        const invalidHeight = (invalidPercent / 100) * 120;
+
+        // 创建堆叠柱状图容器
+        const stackedBar = document.createElement('div');
+        stackedBar.className = 'stats-stacked-bar';
+
+        // 有效部分（灰色，下方）
+        const validBar = document.createElement('div');
+        validBar.className = 'stats-bar-valid';
+        validBar.style.height = `${validHeight}px`;
+
+        // 无效部分（红色，上方）
+        const invalidBar = document.createElement('div');
+        invalidBar.className = 'stats-bar-invalid';
+        invalidBar.style.height = `${invalidHeight}px`;
+
+        // 先添加无效部分（红色，上方），再添加有效部分（灰色，下方）
+        stackedBar.appendChild(invalidBar);
+        stackedBar.appendChild(validBar);
+
+        // Tooltip
+        const tooltip = document.createElement('div');
+        tooltip.className = 'stats-bar-tooltip';
+        tooltip.innerHTML = `SB${stat.sb} Die${stat.die}${stat.isOp ? '(OP)' : ''}<br>Valid: ${stat.validPercent.toFixed(0)}% (${stat.validCount}/${stat.totalCount})<br>Invalid: ${invalidPercent.toFixed(0)}% (${invalidCount}/${stat.totalCount})<br>Age: ${stat.writeAge}`;
+
+        stackedBar.appendChild(tooltip);
+        barWrapper.appendChild(stackedBar);
+
+        // 标签
+        const label = document.createElement('div');
+        label.className = 'stats-bar-label';
+        label.textContent = `${stat.sb}_${stat.die}`;
+
+        barContainer.appendChild(barWrapper);
+        barContainer.appendChild(label);
+        barsContainer.appendChild(barContainer);
+    });
+
+    chartWithAxis.appendChild(yAxisContainer);
+    chartWithAxis.appendChild(barsContainer);
+    chartContainer.appendChild(chartWithAxis);
+
+    // 添加X轴标签
+    const xAxisLabel = document.createElement('div');
+    xAxisLabel.className = 'stats-axis-label';
+    xAxisLabel.style.textAlign = 'center';
+    xAxisLabel.style.width = '100%';
+    xAxisLabel.innerHTML = '<span style="opacity: 0.6;">← block write age: Old</span>' +
+        '<span style="margin: 0 20px; opacity: 0.3;">|</span>' +
+        '<span style="opacity: 0.6;">block write age: Recent →</span>';
+    chartContainer.appendChild(xAxisLabel);
+}
+
 // 导出模块
 window.SSDRenderer = {
     renderSSD,
-    updateMappingTable
+    updateMappingTable,
+    updateBlockStatsPanel
 };

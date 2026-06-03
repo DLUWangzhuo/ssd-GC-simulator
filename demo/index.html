@@ -214,6 +214,26 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- Block Write Age 统计面板 -->
+                <div class="stats-panel">
+                    <div class="stats-header">
+                        <div class="stats-title">Physical Block Write Age vs Valid% (每个柱 = 1个Die Block)</div>
+                        <div class="stats-legend">
+                            <span class="stats-legend-item">
+                                <span class="stats-arrow">← Old</span>
+                            </span>
+                            <span class="stats-legend-item">
+                                <span class="stats-arrow">Recent →</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="stats-chart-container">
+                        <div class="stats-chart" id="blockStatsChart">
+                            <!-- 柱状图将通过JS动态生成 -->
+                        </div>
+                    </div>
+                </div>
             </main>
         </div>
     </div>

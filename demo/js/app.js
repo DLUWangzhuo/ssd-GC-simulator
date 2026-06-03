@@ -10,6 +10,9 @@ function initApp() {
     // 初始化SSD
     window.SSDSimulator.state.initSSD();
 
+    // 初始化Block统计面板
+    window.SSDSimulator.renderer.updateBlockStatsPanel();
+
     console.log('SSD GC Simulator initialized');
 }
 
