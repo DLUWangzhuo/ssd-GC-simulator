@@ -50,8 +50,13 @@ function updateSSDConfig() {
     // 更新GC阈值建议值
     const gcInput = document.getElementById('gcFreePagesThreshold');
     gcInput.max = CONFIG.pagesPerSuperBlock;
-    gcInput.value = Math.min(gcInput.value, CONFIG.pagesPerSuperBlock);
-    CONFIG.gcFreePagesThreshold = parseInt(gcInput.value) || CONFIG.pagesPerSuperBlock;
+    // 确保输入值不超过max
+    if (parseInt(gcInput.value) > CONFIG.pagesPerSuperBlock) {
+        gcInput.value = CONFIG.pagesPerSuperBlock;
+    }
+    // 0表示满时触发GC，其他值按用户输入，非法值用默认值
+    const inputValue = parseInt(gcInput.value);
+    CONFIG.gcFreePagesThreshold = !isNaN(inputValue) ? inputValue : CONFIG.pagesPerSuperBlock;
 }
 
 /**
