@@ -12,7 +12,9 @@ let ssdState = {
     history: [],
     historyIndex: -1,
     currentPsb: 0, // PSB指针，初始指向第一个super block
-    gcTriggerCount: 0 // GC触发次数
+    gcTriggerCount: 0, // GC触发次数
+    blockWriteCounter: {}, // 每个物理block最近一次写入时的全局计数器值（用于计算write age），key格式：'sb_die'
+    globalWriteCounter: 0 // 全局写入计数器，每次写入valid页时递增
 };
 
 /**
@@ -27,10 +29,15 @@ function initSSD() {
     ssdState.historyIndex = -1;
     ssdState.currentPsb = 0; // PSB指针初始指向第一个super block
     ssdState.gcTriggerCount = 0; // GC触发次数清零
+    ssdState.blockWriteCounter = {}; // 重置block写入年龄追踪
+    ssdState.globalWriteCounter = 0; // 重置全局写入计数器
 
     // Create pages: 根据配置的SuperBlock数量，每个SB包含4个Die-Block，每个Block包含9页
     for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
         for (let die = 0; die < CONFIG.dieCount; die++) {
+            // 初始化每个物理block（SB + Die组合）的writeCounter为-1（表示从未写入）
+            ssdState.blockWriteCounter[`${sb}_${die}`] = -1;
+
             for (let page = 0; page < CONFIG.pagesPerBlock; page++) {
                 const ppa = ssdState.pages.length;
                 ssdState.pages.push({
@@ -47,10 +54,19 @@ function initSSD() {
     }
 
     window.SSDSimulator.state.saveState();
-    window.SSDSimulator.renderer.renderSSD();
-    window.SSDSimulator.utils.updateStatus();
-    window.SSDSimulator.renderer.updateMappingTable();
-    window.SSDConfig.updateConfigSummary(); // 更新配置摘要显示
+
+    // 渲染和更新（延迟到模块组装完成后）
+    if (window.SSDSimulator && window.SSDSimulator.renderer) {
+        window.SSDSimulator.renderer.renderSSD();
+        window.SSDSimulator.renderer.updateMappingTable();
+        window.SSDSimulator.renderer.updateBlockStatsPanel();
+    }
+    if (window.SSDSimulator && window.SSDSimulator.utils) {
+        window.SSDSimulator.utils.updateStatus();
+    }
+    if (window.SSDConfig) {
+        window.SSDConfig.updateConfigSummary(); // 更新配置摘要显示
+    }
 }
 
 /**
@@ -152,6 +168,75 @@ function isPsbFull(sb) {
 }
 
 /**
+ * 更新物理block的写入计数器（用于计算write age）
+ * @param {number} sb - Super Block编号
+ * @param {number} die - Die编号
+ */
+function updateBlockWriteCounter(sb, die) {
+    // 全局计数器递增
+    ssdState.globalWriteCounter++;
+    // 使用全局计数器更新该物理block（SB + Die组合）的写入年龄参考点
+    ssdState.blockWriteCounter[`${sb}_${die}`] = ssdState.globalWriteCounter;
+}
+
+/**
+ * 获取物理block的write age（基于全局写入计数器的差值）
+ * @param {number} sb - Super Block编号
+ * @param {number} die - Die编号
+ * @returns {number} write age（当前全局计数器与该block上次写入计数器的差值）
+ */
+function getBlockWriteAge(sb, die) {
+    const lastWriteCounter = ssdState.blockWriteCounter[`${sb}_${die}`];
+    if (lastWriteCounter === undefined || lastWriteCounter === -1) return 0; // 从未写入的block，年龄为0
+
+    // 计算age = 当前全局计数器 - 上次写入时的计数器
+    return ssdState.globalWriteCounter - lastWriteCounter;
+}
+
+/**
+ * 获取指定SB中指定Die的所有页
+ */
+function getBlockPages(sb, die) {
+    return ssdState.pages.filter(p => p.sb === sb && p.die === die);
+}
+
+/**
+ * 获取所有物理block的统计信息（用于统计面板）
+ * 返回数组，每个元素包含：sb, die, validPercent, writeAge, validCount, totalCount, isOp, blockId
+ * 按writeAge从大到小排序（左侧=旧，右侧=新）
+ */
+function getBlockStats() {
+    const stats = [];
+
+    for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
+        for (let die = 0; die < CONFIG.dieCount; die++) {
+            const blockPages = getBlockPages(sb, die);
+            const validCount = blockPages.filter(p => p.state === 'valid').length;
+            const totalCount = blockPages.length;
+            const validPercent = (validCount / totalCount) * 100;
+            const writeAge = getBlockWriteAge(sb, die);
+            const isOp = sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+
+            stats.push({
+                sb,
+                die,
+                blockId: `SB${sb} Die${die}`,
+                validCount,
+                totalCount,
+                validPercent,
+                writeAge,
+                isOp
+            });
+        }
+    }
+
+    // 按writeAge从大到小排序（左侧=旧block，右侧=新block）
+    stats.sort((a, b) => b.writeAge - a.writeAge);
+
+    return stats;
+}
+
+/**
  * 保存当前状态用于撤销
  */
 function saveState() {
@@ -161,7 +246,9 @@ function saveState() {
         ppaToLpa: new Map(ssdState.ppaToLpa),
         sequentialLpa: ssdState.sequentialLpa,
         currentPsb: ssdState.currentPsb,
-        gcTriggerCount: ssdState.gcTriggerCount
+        gcTriggerCount: ssdState.gcTriggerCount,
+        blockWriteCounter: {...ssdState.blockWriteCounter},
+        globalWriteCounter: ssdState.globalWriteCounter
     };
 
     // Remove future states if we're not at the end
@@ -194,10 +281,13 @@ function undo() {
         ssdState.sequentialLpa = state.sequentialLpa;
         ssdState.currentPsb = state.currentPsb;
         ssdState.gcTriggerCount = state.gcTriggerCount;
+        ssdState.blockWriteCounter = {...state.blockWriteCounter};
+        ssdState.globalWriteCounter = state.globalWriteCounter;
 
         window.SSDSimulator.renderer.renderSSD();
         window.SSDSimulator.utils.updateStatus();
         window.SSDSimulator.renderer.updateMappingTable();
+        window.SSDSimulator.renderer.updateBlockStatsPanel();
         window.SSDSimulator.utils.addLog('撤销操作', 'write');
         window.SSDSimulator.state.updateHistoryButtons();
     }
@@ -216,10 +306,13 @@ function redo() {
         ssdState.sequentialLpa = state.sequentialLpa;
         ssdState.currentPsb = state.currentPsb;
         ssdState.gcTriggerCount = state.gcTriggerCount;
+        ssdState.blockWriteCounter = {...state.blockWriteCounter};
+        ssdState.globalWriteCounter = state.globalWriteCounter;
 
         window.SSDSimulator.renderer.renderSSD();
         window.SSDSimulator.utils.updateStatus();
         window.SSDSimulator.renderer.updateMappingTable();
+        window.SSDSimulator.renderer.updateBlockStatsPanel();
         window.SSDSimulator.utils.addLog('重做操作', 'write');
         window.SSDSimulator.state.updateHistoryButtons();
     }
@@ -252,6 +345,7 @@ window.SSDState = {
     // 方法
     initSSD,
     getSuperBlockPages,
+    getBlockPages,
     getFreePages,
     getInvalidPages,
     getFreePagesCount,
@@ -260,6 +354,9 @@ window.SSDState = {
     selectBestPsb,
     getFirstFreePageInPsb,
     isPsbFull,
+    updateBlockWriteCounter,
+    getBlockWriteAge,
+    getBlockStats,
     saveState,
     undo,
     redo,
