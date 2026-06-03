@@ -5,6 +5,114 @@
 
 let gcStepCallback = null;
 
+// 拖动状态
+let dragState = {
+    isDragging: false,
+    currentHandle: null,
+    currentModal: null,
+    offsetX: 0,
+    offsetY: 0
+};
+
+/**
+ * 初始化弹窗拖动功能
+ */
+function initModalDrag() {
+    // GC触发弹窗拖动
+    const gcTriggerHandle = document.getElementById('gcTriggerDragHandle');
+    const gcTriggerModal = document.getElementById('gcTriggerModal');
+    if (gcTriggerHandle && gcTriggerModal) {
+        makeDraggable(gcTriggerHandle, gcTriggerModal);
+    }
+
+    // GC步骤弹窗拖动
+    const gcStepHandle = document.getElementById('gcStepDragHandle');
+    const gcStepModal = document.getElementById('gcStepModal');
+    if (gcStepHandle && gcStepModal) {
+        makeDraggable(gcStepHandle, gcStepModal);
+    }
+}
+
+/**
+ * 使元素可拖动
+ * @param {HTMLElement} handle - 拖动手柄元素
+ * @param {HTMLElement} modal - 要移动的弹窗元素
+ */
+function makeDraggable(handle, modal) {
+    // 鼠标按下开始拖动
+    handle.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        dragState.isDragging = true;
+        dragState.currentHandle = handle;
+        dragState.currentModal = modal;
+
+        // 计算鼠标相对于弹窗的偏移
+        const rect = modal.getBoundingClientRect();
+        dragState.offsetX = e.clientX - rect.left;
+        dragState.offsetY = e.clientY - rect.top;
+
+        // 添加拖动中的视觉反馈
+        modal.style.opacity = '0.95';
+        modal.style.transform = 'scale(1.02)';
+    });
+
+    // 鼠标移动
+    document.addEventListener('mousemove', function(e) {
+        if (!dragState.isDragging || !dragState.currentModal) return;
+
+        const overlay = dragState.currentModal.parentElement;
+        const overlayRect = overlay.getBoundingClientRect();
+
+        // 计算新的位置（相对于overlay）
+        let newX = e.clientX - overlayRect.left - dragState.offsetX;
+        let newY = e.clientY - overlayRect.top - dragState.offsetY;
+
+        // 限制在overlay范围内
+        const modalRect = dragState.currentModal.getBoundingClientRect();
+        newX = Math.max(0, Math.min(newX, overlayRect.width - modalRect.width));
+        newY = Math.max(0, Math.min(newY, overlayRect.height - modalRect.height));
+
+        // 应用位置
+        dragState.currentModal.style.position = 'absolute';
+        dragState.currentModal.style.left = newX + 'px';
+        dragState.currentModal.style.top = newY + 'px';
+        dragState.currentModal.style.right = 'auto';
+        dragState.currentModal.style.bottom = 'auto';
+    });
+
+    // 鼠标释放结束拖动
+    document.addEventListener('mouseup', function() {
+        if (dragState.isDragging && dragState.currentModal) {
+            // 移除视觉反馈
+            dragState.currentModal.style.opacity = '';
+            dragState.currentModal.style.transform = '';
+        }
+        dragState.isDragging = false;
+        dragState.currentHandle = null;
+        dragState.currentModal = null;
+    });
+}
+
+/**
+ * 重置弹窗位置到居中
+ * @param {HTMLElement} modal - 弹窗元素
+ */
+function resetModalPosition(modal) {
+    modal.style.position = '';
+    modal.style.left = '';
+    modal.style.top = '';
+    modal.style.right = '';
+    modal.style.bottom = '';
+    modal.style.opacity = '';
+    modal.style.transform = '';
+}
+
+// 页面加载完成后初始化拖动
+document.addEventListener('DOMContentLoaded', function() {
+    // 延迟初始化确保DOM已完全加载
+    setTimeout(initModalDrag, 100);
+});
+
 /**
  * 选择GC victim SB（无效页最多的SB）
  */
@@ -79,6 +187,8 @@ function triggerGCPrompt() {
  * GC触发弹窗确认执行
  */
 function gcTriggerConfirm() {
+    const modal = document.getElementById('gcTriggerModal');
+    resetModalPosition(modal);
     document.getElementById('gcTriggerOverlay').classList.remove('active');
 
     if (window.pendingGCVictim) {
@@ -94,6 +204,8 @@ function gcTriggerConfirm() {
  * GC触发弹窗取消
  */
 function gcTriggerCancel() {
+    const modal = document.getElementById('gcTriggerModal');
+    resetModalPosition(modal);
     document.getElementById('gcTriggerOverlay').classList.remove('active');
     window.pendingGCVictim = null;
     window.SSDSimulator.utils.addLog('GC: 用户取消GC触发', 'gc');
@@ -287,6 +399,9 @@ function showGCSteps(victimSB) {
                 ssdState.currentPsb = bestPsbAfterGC;
             }
 
+            // 重置弹窗位置并关闭
+            const modal = document.getElementById('gcStepModal');
+            resetModalPosition(modal);
             document.getElementById('gcOverlay').classList.remove('active');
             state.saveState();
             window.SSDSimulator.renderer.renderSSD();

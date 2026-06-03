@@ -219,7 +219,8 @@
     </div>
 
     <div class="gc-step-overlay" id="gcOverlay">
-        <div class="gc-step-modal">
+        <div class="gc-step-modal" id="gcStepModal">
+            <div class="modal-drag-handle" id="gcStepDragHandle"></div>
             <h3 id="gcStepTitle">GC 执行中</h3>
             <p id="gcStepDesc">正在执行垃圾回收...</p>
             <div class="gc-step-progress">
@@ -234,7 +235,8 @@
 
     <!-- GC触发提示弹窗 -->
     <div class="gc-trigger-overlay" id="gcTriggerOverlay">
-        <div class="gc-trigger-modal">
+        <div class="gc-trigger-modal" id="gcTriggerModal">
+            <div class="modal-drag-handle" id="gcTriggerDragHandle"></div>
             <h3 id="gcTriggerTitle">GC 触发提示</h3>
             <div id="gcTriggerDesc" style="margin-bottom: 20px;"></div>
             <div style="display: flex; gap: 12px; justify-content: center;">

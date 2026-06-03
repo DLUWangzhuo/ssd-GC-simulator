@@ -475,7 +475,7 @@ header p {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0.35);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -497,7 +497,7 @@ header p {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(0,0,0,0.35);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -520,6 +520,37 @@ header p {
     width: 90%;
     text-align: center;
     border: 2px solid var(--warning);
+    cursor: move;
+    user-select: none;
+    position: relative;
+    padding-top: 52px;
+}
+
+/* 弹窗拖动手柄样式 */
+.modal-drag-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    cursor: move;
+    background: linear-gradient(135deg, rgba(255,193,7,0.2) 0%, transparent 100%);
+    border-radius: 14px 14px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-drag-handle::before {
+    content: '⋮⋮';
+    font-size: 16px;
+    color: var(--warning);
+    opacity: 0.7;
+    letter-spacing: 2px;
+}
+
+.modal-drag-handle:hover::before {
+    opacity: 1;
 }
 
 .gc-trigger-modal h3 {
@@ -537,6 +568,10 @@ header p {
     width: 90%;
     text-align: center;
     border: 2px solid var(--warning);
+    cursor: move;
+    user-select: none;
+    position: relative;
+    padding-top: 52px;
 }
 
 .gc-step-modal h3 {
