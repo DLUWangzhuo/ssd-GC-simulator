@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sI \"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\")",
+      "Bash(curl -sI \"https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js\")",
+      "Bash(curl -sI \"https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap\")",
+      "Bash(npx playwright --version)",
+      "Bash(npm install -g playwright)",
+      "Bash(node --version)",
+      "Bash(cat \"d:/BackupFiles/zhuo.wang1/Desktop/SPRandom/SPEC.md\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

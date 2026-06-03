@@ -107,8 +107,10 @@ function updateConfigSummary() {
     // 更新随机LBA范围显示
     const randomLbaMaxEl = document.getElementById('randomLbaMax');
     const randomLbaMax2El = document.getElementById('randomLbaMax2');
+    const randomLbaMax3El = document.getElementById('randomLbaMax3');
     if (randomLbaMaxEl) randomLbaMaxEl.textContent = userPages;
     if (randomLbaMax2El) randomLbaMax2El.textContent = userPages;
+    if (randomLbaMax3El) randomLbaMax3El.textContent = userPages;
 }
 
 /**

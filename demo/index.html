@@ -78,6 +78,9 @@
                             <button class="btn btn-success" onclick="sequentialWrite(9)">
                                 <span>LBA顺序(1起)</span> 写 1 块 (9页)
                             </button>
+                            <button class="btn btn-success" onclick="sequentialWrite(36)">
+                                <span>LBA顺序(1起)</span> 写 1 SB (36页)
+                            </button>
                         </div>
                     </div>
 
@@ -89,6 +92,9 @@
                             </button>
                             <button class="btn btn-primary" onclick="randomWrite(9)">
                                 <span>随机LBA(1-<span id="randomLbaMax2">180</span>)</span> 写 1 块 (9页)
+                            </button>
+                            <button class="btn btn-primary" onclick="randomWrite(36)">
+                                <span>随机LBA(1-<span id="randomLbaMax3">180</span>)</span> 写 1 SB (36页)
                             </button>
                         </div>
                     </div>

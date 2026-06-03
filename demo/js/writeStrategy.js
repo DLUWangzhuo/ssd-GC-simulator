@@ -4,6 +4,33 @@
  */
 
 /**
+ * 检查是否有可用写入空间
+ * @returns {object} {hasSpace: boolean, reason: string}
+ */
+function checkAvailableSpace() {
+    const { state } = window.SSDSimulator;
+    const freePages = state.getFreePagesCount();
+    const invalidPages = state.getInvalidPagesCount();
+    const bestPsb = state.selectBestPsb();
+
+    if (bestPsb === -1) {
+        // 所有SB都满了，没有空页
+        if (invalidPages > 0) {
+            return {
+                hasSpace: false,
+                reason: `物理盘存满！无空闲页(${freePages})，存在${invalidPages}个无效页待GC回收`
+            };
+        } else {
+            return {
+                hasSpace: false,
+                reason: `物理盘完全存满！无可用空间，无效页为0`
+            };
+        }
+    }
+    return { hasSpace: true, reason: '' };
+}
+
+/**
  * 顺序写入
  * 写入策略：
  * 1. 初始状态psb指针指向第一个物理super block（SB0）
@@ -15,6 +42,14 @@
  */
 function sequentialWrite(count) {
     const { ssdState, state, utils, gc } = window.SSDSimulator;
+
+    // 检查是否有可用写入空间
+    const spaceCheck = checkAvailableSpace();
+    if (!spaceCheck.hasSpace) {
+        utils.addLog(`顺序写入失败: ${spaceCheck.reason}，请先执行GC`, 'gc');
+        gc.triggerGCPrompt();
+        return;
+    }
 
     // 检查空白页数量是否低于GC阈值
     const checkAndTriggerGC = () => {
@@ -53,7 +88,8 @@ function sequentialWrite(count) {
         if (state.isPsbFull(ssdState.currentPsb)) {
             const bestPsb = state.selectBestPsb();
             if (bestPsb === -1) {
-                utils.addLog('写入失败: 可用空间不足!', 'gc');
+                utils.addLog(`顺序写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
+                gc.triggerGCPrompt();
                 break;
             }
             if (bestPsb !== ssdState.currentPsb) {
@@ -66,19 +102,10 @@ function sequentialWrite(count) {
         let targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
 
         if (!targetPage) {
-            // 没有空闲页，尝试触发GC
-            const freePagesCount = state.getFreePagesCount();
-            if (freePagesCount <= CONFIG.gcFreePagesThreshold && state.getInvalidPagesCount() > 0) {
-                gc.triggerGCPrompt();
-            }
-            utils.addLog(`写入失败: 找不到目标页 LPA ${currentLpa}`, 'gc');
-            currentLpa++;
-            lpasChecked++;
-            if (lpasChecked >= CONFIG.userPages) {
-                utils.addLog('顺序写入: 所有LBA已检查，无法写入', 'gc');
-                break;
-            }
-            continue;
+            // 没有空闲页，触发GC提示
+            utils.addLog(`顺序写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
+            gc.triggerGCPrompt();
+            break;
         }
 
         // 写入数据
@@ -117,6 +144,14 @@ function sequentialWrite(count) {
  */
 function randomWrite(count) {
     const { ssdState, state, utils, gc } = window.SSDSimulator;
+
+    // 检查是否有可用写入空间
+    const spaceCheck = checkAvailableSpace();
+    if (!spaceCheck.hasSpace) {
+        utils.addLog(`随机写入失败: ${spaceCheck.reason}，请先执行GC`, 'gc');
+        gc.triggerGCPrompt();
+        return;
+    }
 
     // 检查空白页数量是否低于GC阈值
     const checkAndTriggerGC = () => {
@@ -164,7 +199,8 @@ function randomWrite(count) {
         if (state.isPsbFull(ssdState.currentPsb)) {
             const bestPsb = state.selectBestPsb();
             if (bestPsb === -1) {
-                utils.addLog('写入失败: 可用空间不足!', 'gc');
+                utils.addLog(`随机写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
+                gc.triggerGCPrompt();
                 break;
             }
             if (bestPsb !== ssdState.currentPsb) {
@@ -177,8 +213,10 @@ function randomWrite(count) {
         let targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
 
         if (!targetPage) {
-            utils.addLog(`写入失败: 找不到目标页 LPA ${lpa}`, 'gc');
-            continue;
+            // 没有空闲页，触发GC提示
+            utils.addLog(`随机写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
+            gc.triggerGCPrompt();
+            break;
         }
 
         // 写入数据
