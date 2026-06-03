@@ -1043,9 +1043,11 @@
         // Sequential write with unified PSB allocation strategy
         // 写入策略：
         // 1. 初始状态psb指针指向第一个物理super block（SB0）
-        // 2. 按物理顺序写入：SB0 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
-        // 3. 当前psb写满后跳转，指向空页最多的psb（包含OP空间SB4）
-        // 4. 如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
+        // 2. 按LBA递增顺序写入（LBA范围1-144），超过144回到1从头开始
+        // 3. 如果LBA已映射，先将旧页标记为invalid，再写入新页
+        // 4. 按物理顺序写入：SB0 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
+        // 5. 当前psb写满后跳转，指向空页最多的psb（包含OP空间SB4）
+        // 6. 如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
         function sequentialWrite(count) {
             // 检查空白页数量是否低于GC阈值
             const checkAndTriggerGC = () => {
@@ -1060,15 +1062,26 @@
             let lpaStart = ssdState.sequentialLpa;
             const pagesToWrite = [];
 
-            // 顺序写：按LPA依次写入
-            while (totalWritten < count) {
-                const actualLpa = lpaStart + totalWritten;
-                if (actualLpa > CONFIG.userPages) break;
+            // 顺序写：LBA范围1-144，超过144回到1
+            let currentLpa = lpaStart;
+            let lpasChecked = 0; // 记录已检查的LBA数量，防止无限循环
 
-                // 检查LPA是否已映射（已存在则跳过）
-                if (ssdState.lpaToPpa.has(actualLpa)) {
-                    totalWritten++;
-                    continue;
+            while (totalWritten < count) {
+                // LBA超过144时回到1
+                if (currentLpa > CONFIG.userPages) {
+                    currentLpa = 1;
+                }
+
+                // 检查LPA是否已映射，如果已映射则将旧页标记为invalid
+                if (ssdState.lpaToPpa.has(currentLpa)) {
+                    // 旧LBA覆写：先将旧页标记为invalid
+                    const oldPpa = ssdState.lpaToPpa.get(currentLpa);
+                    const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
+                    if (oldPage) {
+                        oldPage.state = 'invalid';
+                        ssdState.ppaToLpa.set(oldPpa, currentLpa);
+                    }
+                    // LPA映射会在写入时更新
                 }
 
                 // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb（包含OP空间SB4）
@@ -1088,27 +1101,36 @@
                 let targetPage = getFirstFreePageInPsb(ssdState.currentPsb);
 
                 if (!targetPage) {
-                    addLog(`写入失败: 找不到目标页 LPA ${actualLpa}`, 'gc');
-                    totalWritten++;
+                    // 没有空闲页，尝试触发GC
+                    const freePagesCount = getFreePagesCount();
+                    if (freePagesCount <= CONFIG.gcFreePagesThreshold && getInvalidPagesCount() > 0) {
+                        triggerGCPrompt();
+                    }
+                    addLog(`写入失败: 找不到目标页 LPA ${currentLpa}`, 'gc');
+                    currentLpa++;
+                    lpasChecked++;
+                    if (lpasChecked >= CONFIG.userPages) {
+                        addLog('顺序写入: 所有LBA已检查，无法写入', 'gc');
+                        break;
+                    }
                     continue;
                 }
 
                 // 写入数据
                 targetPage.state = 'valid';
-                targetPage.lpa = actualLpa;
-                ssdState.lpaToPpa.set(actualLpa, targetPage.ppa);
+                targetPage.lpa = currentLpa;
+                ssdState.lpaToPpa.set(currentLpa, targetPage.ppa);
 
-                pagesToWrite.push({lpa: actualLpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
+                pagesToWrite.push({lpa: currentLpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
                 totalWritten++;
+                currentLpa++;
+                lpasChecked = 0; // 重置计数器
 
                 // 检查是否需要触发GC
                 checkAndTriggerGC();
             }
 
-            ssdState.sequentialLpa = lpaStart + totalWritten;
-            if (ssdState.sequentialLpa > CONFIG.userPages) {
-                ssdState.sequentialLpa = 1;
-            }
+            ssdState.sequentialLpa = currentLpa > CONFIG.userPages ? 1 : currentLpa;
 
             saveState();
             renderSSD();
