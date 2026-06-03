@@ -594,6 +594,92 @@
             font-size: 11px;
         }
 
+        /* 配置面板样式 */
+        .config-panel {
+            background: var(--primary);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .config-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--accent);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .config-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .config-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .config-item label {
+            font-size: 12px;
+            color: var(--text);
+            opacity: 0.8;
+        }
+
+        .config-item input {
+            width: 60px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .config-item input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .config-item select {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .config-item select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .config-item span {
+            font-size: 11px;
+            opacity: 0.6;
+        }
+
+        /* 每行显示多个PSB时的样式 */
+        .ssd-grid.cols-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .ssd-grid.cols-2 .superblock {
+            page-break-inside: avoid;
+        }
+
         @media (max-width: 900px) {
             .main-layout {
                 grid-template-columns: 1fr;
@@ -609,8 +695,36 @@
     <div class="container">
         <header>
             <h1>SSD 垃圾回收（GC）模拟器</h1>
-            <p>可视化演示 NAND Flash 垃圾回收原理 | 5 Super Block × 4 Die × 9 Page | OP空间: 1 SB</p>
+            <p>可视化演示 NAND Flash 垃圾回收原理 | <span id="configSummary">5 SB × 4 Die × 9 Page</span></p>
         </header>
+
+        <!-- SSD配置面板 -->
+        <div class="config-panel">
+            <div class="config-title">SSD 参数配置</div>
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>PSB总数量:</label>
+                    <input type="number" id="configTotalSB" value="6" min="2" max="20" onchange="updateSSDConfig()">
+                    <span>个</span>
+                </div>
+                <div class="config-item">
+                    <label>OP空间:</label>
+                    <input type="number" id="configOPSB" value="1" min="0" max="10" onchange="updateSSDConfig()">
+                    <span>个PSB</span>
+                </div>
+                <div class="config-item">
+                    <label>显示布局:</label>
+                    <select id="configDisplayMode" onchange="updateDisplayMode()">
+                        <option value="1">每行1个PSB</option>
+                        <option value="2" selected>每行2个PSB</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top: 12px; text-align: center;">
+                <button class="btn btn-warning" onclick="applyConfig()">应用配置</button>
+                <button class="btn btn-secondary" onclick="resetToDefault()">恢复默认</button>
+            </div>
+        </div>
 
         <div class="main-layout">
             <aside class="control-panel">
@@ -655,10 +769,10 @@
                         <h3>随机写入</h3>
                         <div class="btn-group">
                             <button class="btn btn-primary" onclick="randomWrite(1)">
-                                <span>随机LBA(1-144)</span> 写 1 页
+                                <span>随机LBA(1-<span id="randomLbaMax">144</span>)</span> 写 1 页
                             </button>
                             <button class="btn btn-primary" onclick="randomWrite(9)">
-                                <span>随机LBA(1-144)</span> 写 1 块 (9页)
+                                <span>随机LBA(1-<span id="randomLbaMax2">144</span>)</span> 写 1 块 (9页)
                             </button>
                         </div>
                     </div>
@@ -675,7 +789,7 @@
                         </div>
                         <div class="gc-threshold">
                             <label>GC空白页阈值:</label>
-                            <input type="number" id="gcFreePagesThreshold" value="36" min="0" max="180" onchange="updateGCTreshold()">
+                            <input type="number" id="gcFreePagesThreshold" value="0" min="0" max="180" onchange="updateGCTreshold()">
                             <span>页 (0=满时触发)</span>
                         </div>
                     </div>
@@ -817,16 +931,91 @@
         const CONFIG = {
             dieCount: 4,
             pagesPerBlock: 9,
-            totalSuperBlocks: 5,
+            totalSuperBlocks: 6,
             opSuperBlocks: 1,
             gcThreshold: 0.20,     // 基于用户空间百分比阈值（已弃用）
-            gcFreePagesThreshold: 36, // 基于空白页数量的GC阈值（1个SB容量）
-            maxHistory: 100
+            gcFreePagesThreshold: 0, // 基于空白页数量的GC阈值（1个SB容量）
+            maxHistory: 100,
+            displayCols: 2 // 每行显示的PSB数量
         };
 
-        // Derived values
-        CONFIG.pagesPerSuperBlock = CONFIG.dieCount * CONFIG.pagesPerBlock; // 4 × 9 = 36
-        CONFIG.userPages = (CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks) * CONFIG.pagesPerSuperBlock; // 144
+        // Derived values - 根据配置计算
+        function updateConfigDerived() {
+            CONFIG.pagesPerSuperBlock = CONFIG.dieCount * CONFIG.pagesPerBlock; // 4 × 9 = 36
+            CONFIG.userPages = (CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks) * CONFIG.pagesPerSuperBlock;
+            CONFIG.totalPages = CONFIG.totalSuperBlocks * CONFIG.pagesPerSuperBlock;
+        }
+        updateConfigDerived();
+
+        // 更新SSD配置（参数校验）
+        function updateSSDConfig() {
+            let totalSB = parseInt(document.getElementById('configTotalSB').value) || 5;
+            let opSB = parseInt(document.getElementById('configOPSB').value) || 0;
+
+            // 限制范围
+            totalSB = Math.max(2, Math.min(20, totalSB));
+            opSB = Math.max(0, Math.min(totalSB - 1, opSB));
+
+            // 更新CONFIG
+            CONFIG.totalSuperBlocks = totalSB;
+            CONFIG.opSuperBlocks = opSB;
+            updateConfigDerived();
+
+            // 更新GC阈值建议值
+            const gcInput = document.getElementById('gcFreePagesThreshold');
+            gcInput.max = CONFIG.pagesPerSuperBlock;
+            gcInput.value = Math.min(gcInput.value, CONFIG.pagesPerSuperBlock);
+            CONFIG.gcFreePagesThreshold = parseInt(gcInput.value) || CONFIG.pagesPerSuperBlock;
+        }
+
+        // 应用配置（重新初始化SSD）
+        function applyConfig() {
+            if (confirm('应用新配置将重置SSD，是否继续？')) {
+                updateSSDConfig();
+                updateConfigSummary();
+                initSSD();
+                addLog(`配置已应用: ${CONFIG.totalSuperBlocks}PSB, OP空间${CONFIG.opSuperBlocks}个, 每行${CONFIG.displayCols}个`, 'gc');
+            }
+        }
+
+        // 恢复默认配置
+        function resetToDefault() {
+            document.getElementById('configTotalSB').value = 6;
+            document.getElementById('configOPSB').value = 1;
+            document.getElementById('configDisplayMode').value = '2';
+            document.getElementById('gcFreePagesThreshold').value = 0;
+            addLog('配置已恢复默认', 'gc');
+        }
+
+        // 更新显示模式
+        function updateDisplayMode() {
+            const mode = parseInt(document.getElementById('configDisplayMode').value);
+            CONFIG.displayCols = mode;
+            renderSSD();
+        }
+
+        // 更新配置摘要显示
+        function updateConfigSummary() {
+            const userPages = CONFIG.userPages;
+            const opPages = CONFIG.opSuperBlocks * CONFIG.pagesPerSuperBlock;
+            document.getElementById('configSummary').textContent =
+                `${CONFIG.totalSuperBlocks} SB × ${CONFIG.dieCount} Die × ${CONFIG.pagesPerBlock} Page | 用户空间: ${userPages}页, OP空间: ${opPages}页`;
+
+            // 更新状态概览
+            const totalPagesEl = document.querySelector('.status-grid .status-item:nth-child(1) .value');
+            const userPagesEl = document.querySelector('.status-grid .status-item:nth-child(2) .value');
+            const opPagesEl = document.querySelector('.status-grid .status-item:nth-child(3) .value');
+
+            if (totalPagesEl) totalPagesEl.textContent = CONFIG.totalPages;
+            if (userPagesEl) userPagesEl.textContent = userPages;
+            if (opPagesEl) opPagesEl.textContent = opPages;
+
+            // 更新随机LBA范围显示
+            const randomLbaMaxEl = document.getElementById('randomLbaMax');
+            const randomLbaMax2El = document.getElementById('randomLbaMax2');
+            if (randomLbaMaxEl) randomLbaMaxEl.textContent = userPages;
+            if (randomLbaMax2El) randomLbaMax2El.textContent = userPages;
+        }
 
         // SSD State
         let ssdState = {
@@ -876,6 +1065,7 @@
             renderSSD();
             updateStatus();
             updateMappingTable();
+            updateConfigSummary(); // 更新配置摘要显示
         }
 
         // Get pages by Super Block
@@ -1672,6 +1862,9 @@
         function renderSSD() {
             const grid = document.getElementById('ssdGrid');
             grid.innerHTML = '';
+
+            // 设置显示列数
+            grid.className = 'ssd-grid' + (CONFIG.displayCols === 2 ? ' cols-2' : '');
 
             for (let sb = 0; sb < CONFIG.totalSuperBlocks; sb++) {
                 const isOp = sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
