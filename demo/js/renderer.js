@@ -137,39 +137,60 @@ function updateBlockStatsPanel() {
         const barContainer = document.createElement('div');
         barContainer.className = 'stats-bar-container';
 
-        // 柱状图（包含有效和无效两部分）
+        // 柱状图（包含空白、有效、无效三部分）
         const barWrapper = document.createElement('div');
         barWrapper.className = 'stats-bar-wrapper';
 
-        // 计算有效和无效高度百分比
-        const validHeight = (stat.validPercent / 100) * 120;
-        // 正确计算无效页占比
-        const invalidCount = stat.totalCount - stat.validCount;
-        const invalidPercent = (invalidCount / stat.totalCount) * 100;
+        // 使用 stat 中已有的各状态数量
+        const validPercent = (stat.validCount / stat.totalCount) * 100;
+        const invalidPercent = (stat.invalidCount / stat.totalCount) * 100;
+        const emptyPercent = (stat.emptyCount / stat.totalCount) * 100;
+
+        const validHeight = (validPercent / 100) * 120;
         const invalidHeight = (invalidPercent / 100) * 120;
+        const emptyHeight = (emptyPercent / 100) * 120;
 
         // 创建堆叠柱状图容器
         const stackedBar = document.createElement('div');
         stackedBar.className = 'stats-stacked-bar';
 
-        // 有效部分（灰色，下方）
+        // 空白部分（白色，顶部100%刻度处，向下延伸）
+        const emptyBar = document.createElement('div');
+        emptyBar.className = 'stats-bar-empty';
+        emptyBar.style.height = `${emptyHeight}px`;
+        emptyBar.style.marginTop = '0px';
+
+        // 有效部分（灰色，中层）
         const validBar = document.createElement('div');
         validBar.className = 'stats-bar-valid';
         validBar.style.height = `${validHeight}px`;
 
-        // 无效部分（红色，上方）
+        // 无效部分（红色）绘制逻辑修改：
+        // - 白色占比不为0%时，红色从白色下方开始，向下绘制
+        // - 白色占比为0%时，红色从顶部100%开始，向下绘制
         const invalidBar = document.createElement('div');
         invalidBar.className = 'stats-bar-invalid';
         invalidBar.style.height = `${invalidHeight}px`;
 
-        // 先添加无效部分（红色，上方），再添加有效部分（灰色，下方）
+        if (emptyPercent > 0) {
+            // 白色占比不为0：红色从白色下方开始（紧贴灰色上方）
+            // 向上偏移 invalidHeight（抵消 flex-end 堆叠）
+            invalidBar.style.marginTop = `-${invalidHeight}px`;
+        } else {
+            // 白色占比为0：红色从顶部开始
+            // 向上偏移 invalidHeight（抵消 flex-end 堆叠）
+            invalidBar.style.marginTop = `-${invalidHeight}px`;
+        }
+
+        // 堆叠顺序：先放 invalid（flex-end会把valid推上去），再放valid，再放empty
         stackedBar.appendChild(invalidBar);
         stackedBar.appendChild(validBar);
+        stackedBar.appendChild(emptyBar);
 
         // Tooltip
         const tooltip = document.createElement('div');
         tooltip.className = 'stats-bar-tooltip';
-        tooltip.innerHTML = `SB${stat.sb} Die${stat.die}${stat.isOp ? '(OP)' : ''}<br>Valid: ${stat.validPercent.toFixed(0)}% (${stat.validCount}/${stat.totalCount})<br>Invalid: ${invalidPercent.toFixed(0)}% (${invalidCount}/${stat.totalCount})<br>Age: ${stat.writeAge}`;
+        tooltip.innerHTML = `SB${stat.sb} Die${stat.die}${stat.isOp ? '(OP)' : ''}<br>Empty: ${emptyPercent.toFixed(0)}% (${stat.emptyCount}/${stat.totalCount})<br>Valid: ${validPercent.toFixed(0)}% (${stat.validCount}/${stat.totalCount})<br>Invalid: ${invalidPercent.toFixed(0)}% (${stat.invalidCount}/${stat.totalCount})<br>Age: ${stat.writeAge}`;
 
         stackedBar.appendChild(tooltip);
         barWrapper.appendChild(stackedBar);

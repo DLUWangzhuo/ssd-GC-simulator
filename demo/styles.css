@@ -830,6 +830,14 @@ header p {
 .stats-bar-valid {
     width: 100%;
     background: linear-gradient(180deg, #888 0%, #666 100%);
+    border-radius: 0;
+    transition: height 0.3s ease;
+    min-height: 2px;
+}
+
+.stats-bar-empty {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 3px 3px 0 0;
     transition: height 0.3s ease;
     min-height: 2px;

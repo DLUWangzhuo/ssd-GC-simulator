@@ -212,6 +212,8 @@ function getBlockStats() {
         for (let die = 0; die < CONFIG.dieCount; die++) {
             const blockPages = getBlockPages(sb, die);
             const validCount = blockPages.filter(p => p.state === 'valid').length;
+            const invalidCount = blockPages.filter(p => p.state === 'invalid').length;
+            const emptyCount = blockPages.filter(p => p.state === 'empty').length;
             const totalCount = blockPages.length;
             const validPercent = (validCount / totalCount) * 100;
             const writeAge = getBlockWriteAge(sb, die);
@@ -222,6 +224,8 @@ function getBlockStats() {
                 die,
                 blockId: `SB${sb} Die${die}`,
                 validCount,
+                invalidCount,
+                emptyCount,
                 totalCount,
                 validPercent,
                 writeAge,
