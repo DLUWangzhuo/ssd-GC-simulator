@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSD GC 模拟器 - 可视化垃圾回收演示</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SSD 垃圾回收（GC）模拟器</h1>
+            <p>可视化演示 NAND Flash 垃圾回收原理 | <span id="configSummary">6 SB × 4 Die × 9 Page</span></p>
+        </header>
+
+        <!-- SSD配置面板 -->
+        <div class="config-panel">
+            <div class="config-title">SSD 参数配置</div>
+            <div class="config-grid">
+                <div class="config-item">
+                    <label>PSB总数量:</label>
+                    <input type="number" id="configTotalSB" value="6" min="2" max="20" onchange="updateSSDConfig()">
+                    <span>个</span>
+                </div>
+                <div class="config-item">
+                    <label>OP空间:</label>
+                    <input type="number" id="configOPSB" value="1" min="0" max="10" onchange="updateSSDConfig()">
+                    <span>个PSB</span>
+                </div>
+                <div class="config-item">
+                    <label>显示布局:</label>
+                    <select id="configDisplayMode" onchange="updateDisplayMode()">
+                        <option value="1">每行1个PSB</option>
+                        <option value="2" selected>每行2个PSB</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top: 12px; text-align: center;">
+                <button class="btn btn-warning" onclick="applyConfig()">应用配置</button>
+                <button class="btn btn-secondary" onclick="resetToDefault()">恢复默认</button>
+            </div>
+        </div>
+
+        <div class="main-layout">
+            <aside class="control-panel">
+                <div class="panel">
+                    <div class="panel-title">SSD 结构概览</div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="label">总页数</div>
+                            <div class="value">216</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">用户可用</div>
+                            <div class="value">180</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">OP预留</div>
+                            <div class="value">36</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">每Die页数</div>
+                            <div class="value">9</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 16px;">
+                    <div class="panel-title">操作控制</div>
+
+                    <div class="control-section">
+                        <h3>顺序写入</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-success" onclick="sequentialWrite(1)">
+                                <span>LBA顺序(1起)</span> 写 1 页
+                            </button>
+                            <button class="btn btn-success" onclick="sequentialWrite(9)">
+                                <span>LBA顺序(1起)</span> 写 1 块 (9页)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>随机写入</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" onclick="randomWrite(1)">
+                                <span>随机LBA(1-<span id="randomLbaMax">180</span>)</span> 写 1 页
+                            </button>
+                            <button class="btn btn-primary" onclick="randomWrite(9)">
+                                <span>随机LBA(1-<span id="randomLbaMax2">180</span>)</span> 写 1 块 (9页)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>GC 控制</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-warning" onclick="triggerGC()">
+                                手动触发 GC
+                            </button>
+                            <div style="font-size: 10px; opacity: 0.6; margin-top: 4px;">
+                                自动触发: 空白页&lt;=阈值
+                            </div>
+                        </div>
+                        <div class="gc-threshold">
+                            <label>GC空白页阈值:</label>
+                            <input type="number" id="gcFreePagesThreshold" value="0" min="0" max="216" onchange="updateGCTreshold()">
+                            <span>页 (0=满时触发)</span>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>历史记录</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary btn-icon" onclick="undo()" id="undoBtn">
+                                上一步 (Undo)
+                            </button>
+                            <button class="btn btn-secondary btn-icon" onclick="redo()" id="redoBtn">
+                                下一步 (Redo)
+                            </button>
+                            <button class="btn btn-secondary btn-icon" onclick="resetSSD()">
+                                重置 SSD
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-top: 16px;">
+                    <div class="panel-title">实时状态</div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="label">已用页数</div>
+                            <div class="value" id="usedPages">0</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">用户可用页数</div>
+                            <div class="value" id="freePages">180</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">无效页数</div>
+                            <div class="value" id="invalidPages">0</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="label">空闲比例</div>
+                            <div class="value" id="freeRatio">100%</div>
+                        </div>
+                        <div class="status-item" style="grid-column: span 2;">
+                            <div class="label">GC触发次数</div>
+                            <div class="value" id="gcTriggerCount" style="color: var(--warning);">0</div>
+                        </div>
+                    </div>
+
+                    <div class="control-section" style="margin-top: 16px;">
+                        <h3>操作日志</h3>
+                        <div class="log-container" id="logContainer">
+                            <div class="log-entry">SSD 初始化完成</div>
+                        </div>
+                    </div>
+
+                    <div class="history-nav">
+                        <span style="font-size: 11px; opacity: 0.6;">历史: </span>
+                        <span id="historyPos" style="font-family: 'JetBrains Mono'; font-size: 11px;">0 / 0</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="visual-area">
+                <div class="ssd-container">
+                    <div class="ssd-header">
+                        <h2>物理页分布</h2>
+                        <div class="ssd-legend">
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: var(--page-empty); border: 1px solid #ddd;"></div>
+                                <span>空页</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: var(--page-valid); border: 2px solid var(--page-valid-border);"></div>
+                                <span>有效</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: var(--page-invalid); border: 2px solid var(--page-invalid-border);"></div>
+                                <span>无效</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #4169E1; border: 2px solid #0000CD;"></div>
+                                <span>读至RAM</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ssd-grid" id="ssdGrid"></div>
+                </div>
+
+                <div class="mapping-section">
+                    <div class="mapping-header">
+                        <div class="mapping-title">逻辑地址映射表 (LPA 1-180 → PPA)</div>
+                    </div>
+                    <div class="mapping-table-container">
+                        <table class="mapping-table">
+                            <thead>
+                                <tr>
+                                    <th>LPA (逻辑页)</th>
+                                    <th>PPA (物理位置)</th>
+                                    <th>状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mappingTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="gc-step-overlay" id="gcOverlay">
+        <div class="gc-step-modal">
+            <h3 id="gcStepTitle">GC 执行中</h3>
+            <p id="gcStepDesc">正在执行垃圾回收...</p>
+            <div class="gc-step-progress">
+                <div class="gc-step-dot" id="dot1"></div>
+                <div class="gc-step-dot" id="dot2"></div>
+                <div class="gc-step-dot" id="dot3"></div>
+                <div class="gc-step-dot" id="dot4"></div>
+            </div>
+            <button class="btn btn-warning" onclick="gcStepNext()">下一步</button>
+        </div>
+    </div>
+
+    <!-- GC触发提示弹窗 -->
+    <div class="gc-trigger-overlay" id="gcTriggerOverlay">
+        <div class="gc-trigger-modal">
+            <h3 id="gcTriggerTitle">GC 触发提示</h3>
+            <div id="gcTriggerDesc" style="margin-bottom: 20px;"></div>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button class="btn btn-warning" onclick="gcTriggerConfirm()">确认执行GC</button>
+                <button class="btn btn-secondary" onclick="gcTriggerCancel()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模块化JS（按依赖顺序加载） -->
+    <script src="js/config.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/writeStrategy.js"></script>
+    <script src="js/gcStrategy.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

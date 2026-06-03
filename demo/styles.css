@@ -1,0 +1,683 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary: #1a1a2e;
+    --accent: #e94560;
+    --bg: #16213e;
+    --text: #eaeaea;
+    --success: #4ecca3;
+    --warning: #ffc107;
+    --page-empty: #ffffff;
+    --page-valid: #90EE90;
+    --page-valid-border: #228B22;
+    --page-invalid: #CD853F;
+    --page-invalid-border: #8B4513;
+    --page-size: 32px;
+}
+
+body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 24px;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--primary) 0%, #0f0f23 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+header h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+header p {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.main-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+}
+
+.panel {
+    background: var(--primary);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.control-section {
+    margin-bottom: 20px;
+}
+
+.control-section h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--success);
+    margin-bottom: 12px;
+}
+
+.btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.btn {
+    font-family: 'Noto Sans SC', sans-serif;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #ff6b8a;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+}
+
+.btn-secondary:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.btn-success {
+    background: var(--success);
+    color: var(--primary);
+}
+
+.btn-success:hover {
+    background: #6fe8b8;
+}
+
+.btn-warning {
+    background: var(--warning);
+    color: var(--primary);
+}
+
+.btn-warning:hover {
+    background: #ffda44;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.status-item {
+    background: rgba(255,255,255,0.05);
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.status-item .label {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-bottom: 4px;
+}
+
+.status-item .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.status-item .value.warning {
+    color: var(--warning);
+}
+
+.status-item .value.danger {
+    color: var(--accent);
+}
+
+.log-container {
+    max-height: 200px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+
+.log-entry {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    opacity: 0.9;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-entry.gc {
+    color: var(--warning);
+}
+
+.log-entry.write {
+    color: var(--success);
+}
+
+.visual-area {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ssd-container {
+    background: var(--primary);
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.ssd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.ssd-header h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    color: var(--accent);
+}
+
+.ssd-legend {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+}
+
+.ssd-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.superblock {
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.superblock.op {
+    border-color: var(--accent);
+    border-style: dashed;
+}
+
+.superblock-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.superblock-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0.8;
+}
+
+.superblock.op .superblock-title {
+    color: var(--accent);
+}
+
+.superblock-stats {
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.blocks-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+.block {
+    flex: 0 0 auto;
+    width: calc(3 * var(--page-size) + 2 * 3px + 8px);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.block-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    text-align: center;
+    opacity: 0.5;
+    margin-bottom: 2px;
+}
+
+.pages-grid {
+    display: grid;
+    grid-template-columns: repeat(3, var(--page-size));
+    grid-template-rows: repeat(3, var(--page-size));
+    gap: 3px;
+}
+
+.page {
+    width: var(--page-size);
+    height: var(--page-size);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.page.empty {
+    background: var(--page-empty);
+    border: 1px solid #ddd;
+    color: transparent;
+}
+
+.page.valid {
+    background: var(--page-valid);
+    border: 2px solid var(--page-valid-border);
+    color: #1a5c1a;
+}
+
+.page.invalid {
+    background: var(--page-invalid);
+    border: 2px solid var(--page-invalid-border);
+    color: #5a3a1a;
+    text-decoration: line-through;
+    opacity: 0.85;
+}
+
+.page.readToRam {
+    background: #4169E1;
+    border: 2px solid #0000CD;
+    color: white;
+    animation: ram-pulse 0.5s ease infinite;
+}
+
+@keyframes ram-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.page.highlight {
+    animation: pulse 0.5s ease;
+    box-shadow: 0 0 0 3px var(--accent);
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.mapping-section {
+    background: var(--primary);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.mapping-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.mapping-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+}
+
+.mapping-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.mapping-table-container {
+    max-height: 200px;
+    overflow: auto;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+}
+
+.mapping-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+
+.mapping-table th {
+    background: rgba(255,255,255,0.1);
+    padding: 8px 12px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.mapping-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.mapping-table tr:hover td {
+    background: rgba(255,255,255,0.05);
+}
+
+.gc-threshold {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.gc-threshold label {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.gc-threshold input {
+    width: 60px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: center;
+}
+
+.gc-threshold input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.gc-step-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.gc-step-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* GC触发提示弹窗样式 */
+.gc-trigger-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.gc-trigger-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.gc-trigger-modal {
+    background: var(--primary);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 480px;
+    width: 90%;
+    text-align: center;
+    border: 2px solid var(--warning);
+}
+
+.gc-trigger-modal h3 {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--warning);
+    margin-bottom: 16px;
+    font-size: 18px;
+}
+
+.gc-step-modal {
+    background: var(--primary);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 500px;
+    width: 90%;
+    text-align: center;
+    border: 2px solid var(--warning);
+}
+
+.gc-step-modal h3 {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--warning);
+    margin-bottom: 16px;
+    font-size: 18px;
+}
+
+.gc-step-modal p {
+    margin-bottom: 24px;
+    line-height: 1.6;
+}
+
+.gc-step-progress {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.gc-step-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: all 0.3s ease;
+}
+
+.gc-step-dot.active {
+    background: var(--warning);
+}
+
+.gc-step-dot.completed {
+    background: var(--success);
+}
+
+.history-nav {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.btn-icon {
+    padding: 8px 12px;
+    font-size: 11px;
+}
+
+/* 配置面板样式 */
+.config-panel {
+    background: var(--primary);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.config-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.config-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+}
+
+.config-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-item label {
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0.8;
+}
+
+.config-item input {
+    width: 60px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: center;
+}
+
+.config-item input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.config-item select {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.1);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.config-item select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.config-item span {
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+/* 每行显示多个PSB时的样式 */
+.ssd-grid.cols-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.ssd-grid.cols-2 .superblock {
+    page-break-inside: avoid;
+}
+
+@media (max-width: 900px) {
+    .main-layout {
+        grid-template-columns: 1fr;
+    }
+
+    :root {
+        --page-size: 36px;
+    }
+}
