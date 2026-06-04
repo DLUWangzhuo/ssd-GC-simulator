@@ -140,8 +140,20 @@ function triggerGC() {
  */
 function triggerGCPrompt() {
     const { ssdState, state, utils } = window.SSDSimulator;
+
+    // 检查是否已经有弹窗显示，避免重复弹出
+    const gcOverlay = document.getElementById('gcTriggerOverlay');
+    if (gcOverlay && gcOverlay.classList.contains('active')) {
+        return;
+    }
+
     const freePagesCount = state.getFreePagesCount();
     const invalidPagesCount = state.getInvalidPagesCount();
+
+    // 确保满足GC触发条件：空白页数量 <= 阈值 且 有无效页可回收
+    if (freePagesCount > CONFIG.gcFreePagesThreshold || invalidPagesCount === 0) {
+        return;
+    }
 
     // 获取各PSB无效页统计
     const psbCounts = utils.getPsbInvalidCounts();
@@ -157,7 +169,7 @@ function triggerGCPrompt() {
     const victimIsOp = victimSB ? victimSB.sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks : false;
 
     // 显示弹窗
-    document.getElementById('gcTriggerOverlay').classList.add('active');
+    gcOverlay.classList.add('active');
 
     // 更新弹窗内容
     document.getElementById('gcTriggerTitle').textContent = 'GC 触发提示';

@@ -37,18 +37,31 @@ function checkAvailableSpace() {
  * 2. 按LBA递增顺序写入（LBA范围1-userPages），超过userPages回到1从头开始
  * 3. 如果LBA已映射，先将旧页标记为invalid，再写入新页
  * 4. 按物理顺序写入：SB0 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
- * 5. 当前psb写满后跳转，指向空页最多的psb（包含OP空间）
- * 6. 如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
+ * 5. 写入数量限制为当前PSB的空页数量
+ * 6. 如果请求数量 > 当前PSB空页数，写入完成后跳转到空页最多的PSB
+ * 7. 跳转规则：空页最多的PSB，相同则按序号（优先级：SB0 > SB1 > SB2...）
  */
 function sequentialWrite(count) {
     const { ssdState, state, utils, gc } = window.SSDSimulator;
 
-    // 检查是否有可用写入空间
-    const spaceCheck = checkAvailableSpace();
-    if (!spaceCheck.hasSpace) {
-        utils.addLog(`顺序写入失败: ${spaceCheck.reason}，请先执行GC`, 'gc');
+    // 检查当前PSB的剩余空页数量
+    const currentPsbFreePages = state.getSuperBlockPages(ssdState.currentPsb)
+        .filter(p => p.state === 'empty').length;
+
+    // 写入数量限制为当前PSB的空页数量
+    const actualWriteCount = Math.min(count, currentPsbFreePages);
+    if (actualWriteCount === 0) {
+        utils.addLog(`顺序写入失败: SB${ssdState.currentPsb}无空闲页，请先执行GC`, 'gc');
         gc.triggerGCPrompt();
         return;
+    }
+
+    // 记录是否需要跳转PSB（请求数量超过当前PSB空页数，或写入后PSB被写满）
+    const psbWillBeFull = actualWriteCount === currentPsbFreePages;
+    if (count > currentPsbFreePages) {
+        utils.addLog(`顺序写入: SB${ssdState.currentPsb}仅剩${currentPsbFreePages}个空页，限制写入${actualWriteCount}页后跳转`, 'write');
+    } else if (psbWillBeFull) {
+        utils.addLog(`顺序写入: SB${ssdState.currentPsb}写入${actualWriteCount}页后PSB写满，切换PSB`, 'write');
     }
 
     // 检查空白页数量是否低于GC阈值
@@ -65,9 +78,8 @@ function sequentialWrite(count) {
 
     // 顺序写：LBA范围1-userPages，超过userPages回到1
     let currentLpa = lpaStart;
-    let lpasChecked = 0; // 记录已检查的LBA数量，防止无限循环
 
-    while (totalWritten < count) {
+    while (totalWritten < actualWriteCount) {
         // LBA超过userPages时回到1
         if (currentLpa > CONFIG.userPages) {
             currentLpa = 1;
@@ -84,27 +96,12 @@ function sequentialWrite(count) {
             }
         }
 
-        // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb
-        if (state.isPsbFull(ssdState.currentPsb)) {
-            const bestPsb = state.selectBestPsb();
-            if (bestPsb === -1) {
-                utils.addLog(`顺序写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
-                gc.triggerGCPrompt();
-                break;
-            }
-            if (bestPsb !== ssdState.currentPsb) {
-                utils.addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}`, 'write');
-                ssdState.currentPsb = bestPsb;
-            }
-        }
-
         // 从当前psb获取第一个空闲页（按page 0-8 → die 0-3顺序）
         let targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
 
         if (!targetPage) {
-            // 没有空闲页，触发GC提示
-            utils.addLog(`顺序写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
-            gc.triggerGCPrompt();
+            // 当前PSB没有空闲页（理论上不应该发生，因为已限制写入数量）
+            utils.addLog(`顺序写入中断: SB${ssdState.currentPsb}已满`, 'write');
             break;
         }
 
@@ -116,13 +113,21 @@ function sequentialWrite(count) {
         pagesToWrite.push({lpa: currentLpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
         totalWritten++;
         currentLpa++;
-        lpasChecked = 0; // 重置计数器
 
         // 检查是否需要触发GC
         checkAndTriggerGC();
     }
 
     ssdState.sequentialLpa = currentLpa > CONFIG.userPages ? 1 : currentLpa;
+
+    // 如果写入后PSB被写满，跳转到空页最多的PSB
+    if (psbWillBeFull) {
+        const bestPsb = state.selectBestPsb();
+        if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
+            utils.addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}(空页最多)`, 'write');
+            ssdState.currentPsb = bestPsb;
+        }
+    }
 
     // 更新用户写入LBA页计数
     if (totalWritten > 0) {
@@ -153,18 +158,31 @@ function sequentialWrite(count) {
  * 写入策略：
  * 1. 初始状态psb指针指向第一个物理super block（SB0）
  * 2. 按物理顺序写入：SB0 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
- * 3. 当前psb写满后跳转，指向空页最多的psb（包含OP空间）
- * 4. 如果存在多个空页最大且数目相同的psb，则按照序号跳转（优先级：psb0>psb1>psb2...）
+ * 3. 写入数量限制为当前PSB的空页数量
+ * 4. 如果请求数量 > 当前PSB空页数，写入完成后跳转到空页最多的PSB
+ * 5. 跳转规则：空页最多的PSB，相同则按序号（优先级：SB0 > SB1 > SB2...）
  */
 function randomWrite(count) {
     const { ssdState, state, utils, gc } = window.SSDSimulator;
 
-    // 检查是否有可用写入空间
-    const spaceCheck = checkAvailableSpace();
-    if (!spaceCheck.hasSpace) {
-        utils.addLog(`随机写入失败: ${spaceCheck.reason}，请先执行GC`, 'gc');
+    // 检查当前PSB的剩余空页数量
+    const currentPsbFreePages = state.getSuperBlockPages(ssdState.currentPsb)
+        .filter(p => p.state === 'empty').length;
+
+    // 写入数量限制为当前PSB的空页数量
+    const actualWriteCount = Math.min(count, currentPsbFreePages);
+    if (actualWriteCount === 0) {
+        utils.addLog(`随机写入失败: SB${ssdState.currentPsb}无空闲页，请先执行GC`, 'gc');
         gc.triggerGCPrompt();
         return;
+    }
+
+    // 记录是否需要跳转PSB（请求数量超过当前PSB空页数，或写入后PSB被写满）
+    const psbWillBeFull = actualWriteCount === currentPsbFreePages;
+    if (count > currentPsbFreePages) {
+        utils.addLog(`随机写入: SB${ssdState.currentPsb}仅剩${currentPsbFreePages}个空页，限制写入${actualWriteCount}页后跳转`, 'write');
+    } else if (psbWillBeFull) {
+        utils.addLog(`随机写入: SB${ssdState.currentPsb}写入${actualWriteCount}页后PSB写满，切换PSB`, 'write');
     }
 
     // 检查空白页数量是否低于GC阈值
@@ -178,9 +196,9 @@ function randomWrite(count) {
     const pagesToWrite = [];
     let overwriteCount = 0; // 统计覆写次数
 
-    // 生成随机LPA列表（允许重复，实现覆写场景）
+    // 生成随机LPA列表（只生成实际要写入的数量，允许重复，实现覆写场景）
     const lpaList = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < actualWriteCount; i++) {
         const lpa = Math.floor(Math.random() * CONFIG.userPages) + 1;
         lpaList.push(lpa);
     }
@@ -204,32 +222,17 @@ function randomWrite(count) {
         }
     }
 
-    // 按物理顺序写入：每个SB按 Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0 → Die0 Page1 → ...
-    // 当当前SB写满后，跳转到空页最多的SB（包含OP空间）
-    for (let i = 0; i < lpaList.length; i++) {
+    // 限制写入数量为当前PSB的空页数量
+    let writtenCount = 0;
+    for (let i = 0; i < lpaList.length && writtenCount < actualWriteCount; i++) {
         const lpa = lpaList[i];
-
-        // 检查当前psb是否已写满，如果已满则跳转到空页最多的psb
-        if (state.isPsbFull(ssdState.currentPsb)) {
-            const bestPsb = state.selectBestPsb();
-            if (bestPsb === -1) {
-                utils.addLog(`随机写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
-                gc.triggerGCPrompt();
-                break;
-            }
-            if (bestPsb !== ssdState.currentPsb) {
-                utils.addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}`, 'write');
-                ssdState.currentPsb = bestPsb;
-            }
-        }
 
         // 从当前psb获取第一个空闲页（按page 0-8 → die 0-3顺序）
         let targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
 
         if (!targetPage) {
-            // 没有空闲页，触发GC提示
-            utils.addLog(`随机写入中断: 物理盘存满，请先执行GC回收无效页`, 'gc');
-            gc.triggerGCPrompt();
+            // 当前PSB没有空闲页（理论上不应该发生，因为已限制写入数量）
+            utils.addLog(`随机写入中断: SB${ssdState.currentPsb}已满`, 'write');
             break;
         }
 
@@ -239,12 +242,22 @@ function randomWrite(count) {
         ssdState.lpaToPpa.set(lpa, targetPage.ppa);
 
         pagesToWrite.push({lpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
+        writtenCount++;
 
         // 检查是否需要触发GC
         checkAndTriggerGC();
     }
 
     utils.addLog(`随机写入 ${pagesToWrite.length} 页${overwriteCount > 0 ? ` (覆写${overwriteCount}个)` : ''}: LBA随机${overwriteCount > 0 ? ', 旧页已invalidate' : ''}`, 'write');
+
+    // 如果写入后PSB被写满，跳转到空页最多的PSB
+    if (psbWillBeFull) {
+        const bestPsb = state.selectBestPsb();
+        if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
+            utils.addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}(空页最多)`, 'write');
+            ssdState.currentPsb = bestPsb;
+        }
+    }
 
     // 更新用户写入LBA页计数
     if (pagesToWrite.length > 0) {
