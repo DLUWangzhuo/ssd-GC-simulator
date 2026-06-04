@@ -156,9 +156,6 @@ function triggerGCPrompt() {
     const victimSB = selectVictimPsb();
     const victimIsOp = victimSB ? victimSB.sb >= CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks : false;
 
-    // 更新GC次数
-    ssdState.gcTriggerCount++;
-
     // 显示弹窗
     document.getElementById('gcTriggerOverlay').classList.add('active');
 
@@ -401,6 +398,9 @@ function showGCSteps(victimSB) {
 
         } else if (currentStep > totalSteps) {
             // Complete
+            // GC次数只增加一次（整个GC操作完成后才计数）
+            ssdState.gcTriggerCount++;
+
             // GC完成后，更新psb写入指针指向空页最多的psb（包括OP空间）
             const bestPsbAfterGC = state.selectBestPsb();
             if (bestPsbAfterGC !== -1) {

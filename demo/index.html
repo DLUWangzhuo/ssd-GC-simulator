@@ -197,24 +197,6 @@
                     <div class="ssd-grid" id="ssdGrid"></div>
                 </div>
 
-                <div class="mapping-section">
-                    <div class="mapping-header">
-                        <div class="mapping-title">逻辑地址映射表 (LPA 1-180 → PPA)</div>
-                    </div>
-                    <div class="mapping-table-container">
-                        <table class="mapping-table">
-                            <thead>
-                                <tr>
-                                    <th>LPA (逻辑页)</th>
-                                    <th>PPA (物理位置)</th>
-                                    <th>状态</th>
-                                </tr>
-                            </thead>
-                            <tbody id="mappingTable"></tbody>
-                        </table>
-                    </div>
-                </div>
-
                 <!-- Block Write Age 统计面板 -->
                 <div class="stats-panel">
                     <div class="stats-header">
@@ -232,6 +214,24 @@
                         <div class="stats-chart" id="blockStatsChart">
                             <!-- 柱状图将通过JS动态生成 -->
                         </div>
+                    </div>
+                </div>
+
+                <div class="mapping-section">
+                    <div class="mapping-header">
+                        <div class="mapping-title">逻辑地址映射表 (LPA 1-180 → PPA)</div>
+                    </div>
+                    <div class="mapping-table-container">
+                        <table class="mapping-table">
+                            <thead>
+                                <tr>
+                                    <th>LPA (逻辑页)</th>
+                                    <th>PPA (物理位置)</th>
+                                    <th>状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mappingTable"></tbody>
+                        </table>
                     </div>
                 </div>
             </main>
