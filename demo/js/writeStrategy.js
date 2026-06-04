@@ -31,6 +31,93 @@ function checkAvailableSpace() {
 }
 
 /**
+ * 写入单个LBA页
+ * 这是写入的基本单元操作，每次调用都会完整执行：
+ * 1. 检查并处理覆写（LPA已映射则将旧页标记为invalid）
+ * 2. 分配物理页
+ * 3. 更新映射表
+ * 4. 检查是否需要触发GC
+ * 5. 更新写入计数器
+ * 6. 渲染和状态更新
+ * @param {number} lpa - 要写入的LPA（逻辑页地址）
+ * @param {boolean} renderAfter - 是否在写入后立即渲染（批量写入时可设为false，最后统一渲染）
+ * @returns {object|null} 写入的页信息，失败返回null
+ */
+function writeSingleLba(lpa, renderAfter = true) {
+    const { ssdState, state, utils, gc } = window.SSDSimulator;
+
+    // 检查当前PSB是否有空闲页
+    const currentPsbFreePages = state.getSuperBlockPages(ssdState.currentPsb)
+        .filter(p => p.state === 'empty').length;
+
+    if (currentPsbFreePages === 0) {
+        return null; // 当前PSB无空闲页
+    }
+
+    // 检查LPA是否已映射，如果已映射则将旧页标记为invalid
+    if (ssdState.lpaToPpa.has(lpa)) {
+        // 旧LBA覆写：先将旧页标记为invalid
+        const oldPpa = ssdState.lpaToPpa.get(lpa);
+        const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
+        if (oldPage) {
+            oldPage.state = 'invalid';
+            ssdState.ppaToLpa.set(oldPpa, lpa);
+        }
+    }
+
+    // 从当前psb获取第一个空闲页（按page 0-8 → die 0-3顺序）
+    let targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
+
+    if (!targetPage) {
+        // 当前PSB没有空闲页（理论上不应该发生）
+        return null;
+    }
+
+    // 写入数据
+    targetPage.state = 'valid';
+    targetPage.lpa = lpa;
+    ssdState.lpaToPpa.set(lpa, targetPage.ppa);
+
+    // 更新被写入物理block（SB + Die组合）的写入计数器（用于计算write age）
+    state.updateBlockWriteCounter(targetPage.sb, targetPage.die);
+
+    // 检查是否需要触发GC
+    const freePagesCount = state.getFreePagesCount();
+    if (freePagesCount <= CONFIG.gcFreePagesThreshold && state.getInvalidPagesCount() > 0) {
+        gc.triggerGCPrompt();
+    }
+
+    // 检查写入后当前PSB是否已满，如果满了则跳转
+    const newFreePages = state.getSuperBlockPages(ssdState.currentPsb)
+        .filter(p => p.state === 'empty').length;
+    if (newFreePages === 0) {
+        const bestPsb = state.selectBestPsb();
+        if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
+            ssdState.currentPsb = bestPsb;
+        }
+    }
+
+    // 更新用户写入LBA页计数
+    ssdState.userWriteCount++;
+
+    // 根据参数决定是否立即渲染
+    if (renderAfter) {
+        state.saveState();
+        window.SSDSimulator.renderer.renderSSD();
+        utils.updateStatus();
+        window.SSDSimulator.renderer.updateMappingTable();
+        window.SSDSimulator.renderer.updateBlockStatsPanel();
+    }
+
+    return {
+        lpa: lpa,
+        ppa: targetPage.ppa,
+        die: targetPage.die,
+        sb: targetPage.sb
+    };
+}
+
+/**
  * 顺序写入
  * 写入策略：
  * 1. 初始状态psb指针指向第一个物理super block（SB0）
@@ -40,6 +127,8 @@ function checkAvailableSpace() {
  * 5. 写入数量限制为当前PSB的空页数量
  * 6. 如果请求数量 > 当前PSB空页数，写入完成后跳转到空页最多的PSB
  * 7. 跳转规则：空页最多的PSB，相同则按序号（优先级：SB0 > SB1 > SB2...）
+ *
+ * 实现：将N次写入等效为连续执行N次writeSingleLba操作
  */
 function sequentialWrite(count) {
     const { ssdState, state, utils, gc } = window.SSDSimulator;
@@ -64,84 +153,41 @@ function sequentialWrite(count) {
         utils.addLog(`顺序写入: SB${ssdState.currentPsb}写入${actualWriteCount}页后PSB写满，切换PSB`, 'write');
     }
 
-    // 检查空白页数量是否低于GC阈值
-    const checkAndTriggerGC = () => {
-        const freePagesCount = state.getFreePagesCount();
-        if (freePagesCount <= CONFIG.gcFreePagesThreshold && state.getInvalidPagesCount() > 0) {
-            gc.triggerGCPrompt();
-        }
-    };
-
     let totalWritten = 0;
     let lpaStart = ssdState.sequentialLpa;
     const pagesToWrite = [];
-
-    // 顺序写：LBA范围1-userPages，超过userPages回到1
     let currentLpa = lpaStart;
 
+    // 顺序写：LBA范围1-userPages，超过userPages回到1
     while (totalWritten < actualWriteCount) {
         // LBA超过userPages时回到1
         if (currentLpa > CONFIG.userPages) {
             currentLpa = 1;
         }
 
-        // 检查LPA是否已映射，如果已映射则将旧页标记为invalid
-        if (ssdState.lpaToPpa.has(currentLpa)) {
-            // 旧LBA覆写：先将旧页标记为invalid
-            const oldPpa = ssdState.lpaToPpa.get(currentLpa);
-            const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
-            if (oldPage) {
-                oldPage.state = 'invalid';
-                ssdState.ppaToLpa.set(oldPpa, currentLpa);
-            }
-        }
+        // 连续执行N次写入单个LBA的操作
+        const writeResult = writeSingleLba(currentLpa, false); // 最后统一渲染
 
-        // 从当前psb获取第一个空闲页（按page 0-8 → die 0-3顺序）
-        let targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
-
-        if (!targetPage) {
-            // 当前PSB没有空闲页（理论上不应该发生，因为已限制写入数量）
+        if (writeResult === null) {
+            // 写入失败（如无空闲页）
             utils.addLog(`顺序写入中断: SB${ssdState.currentPsb}已满`, 'write');
             break;
         }
 
-        // 写入数据
-        targetPage.state = 'valid';
-        targetPage.lpa = currentLpa;
-        ssdState.lpaToPpa.set(currentLpa, targetPage.ppa);
-
-        pagesToWrite.push({lpa: currentLpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
+        pagesToWrite.push(writeResult);
         totalWritten++;
         currentLpa++;
 
-        // 检查是否需要触发GC
-        checkAndTriggerGC();
+        // 检查空白页数量是否低于GC阈值
+        const freePagesCount = state.getFreePagesCount();
+        if (freePagesCount <= CONFIG.gcFreePagesThreshold && state.getInvalidPagesCount() > 0) {
+            gc.triggerGCPrompt();
+        }
     }
 
     ssdState.sequentialLpa = currentLpa > CONFIG.userPages ? 1 : currentLpa;
 
-    // 如果写入后PSB被写满，跳转到空页最多的PSB
-    if (psbWillBeFull) {
-        const bestPsb = state.selectBestPsb();
-        if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
-            utils.addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}(空页最多)`, 'write');
-            ssdState.currentPsb = bestPsb;
-        }
-    }
-
-    // 更新用户写入LBA页计数
-    if (totalWritten > 0) {
-        ssdState.userWriteCount += totalWritten;
-    }
-
-    // 更新被写入物理block（SB + Die组合）的写入计数器（用于计算write age）
-    // 只有写入valid页才算写入动作
-    const writtenBlocks = new Set(pagesToWrite.map(p => `${p.sb}_${p.die}`));
-    writtenBlocks.forEach(blockKey => {
-        const [sb, die] = blockKey.split('_').map(Number);
-        state.updateBlockWriteCounter(sb, die);
-    });
-
+    // 写入完成后统一保存状态和渲染
     state.saveState();
     window.SSDSimulator.renderer.renderSSD();
     utils.updateStatus();
@@ -161,6 +207,8 @@ function sequentialWrite(count) {
  * 3. 写入数量限制为当前PSB的空页数量
  * 4. 如果请求数量 > 当前PSB空页数，写入完成后跳转到空页最多的PSB
  * 5. 跳转规则：空页最多的PSB，相同则按序号（优先级：SB0 > SB1 > SB2...）
+ *
+ * 实现：将N次写入等效为连续执行N次writeSingleLba操作
  */
 function randomWrite(count) {
     const { ssdState, state, utils, gc } = window.SSDSimulator;
@@ -185,16 +233,7 @@ function randomWrite(count) {
         utils.addLog(`随机写入: SB${ssdState.currentPsb}写入${actualWriteCount}页后PSB写满，切换PSB`, 'write');
     }
 
-    // 检查空白页数量是否低于GC阈值
-    const checkAndTriggerGC = () => {
-        const freePagesCount = state.getFreePagesCount();
-        if (freePagesCount <= CONFIG.gcFreePagesThreshold && state.getInvalidPagesCount() > 0) {
-            gc.triggerGCPrompt();
-        }
-    };
-
     const pagesToWrite = [];
-    let overwriteCount = 0; // 统计覆写次数
 
     // 生成随机LPA列表（只生成实际要写入的数量，允许重复，实现覆写场景）
     const lpaList = [];
@@ -208,70 +247,32 @@ function randomWrite(count) {
         return;
     }
 
-    // 预处理：Invalidate所有待写LPA的旧映射（处理覆写场景）
-    const uniqueLpas = new Set(lpaList);
-    for (const lpa of uniqueLpas) {
-        if (ssdState.lpaToPpa.has(lpa)) {
-            const oldPpa = ssdState.lpaToPpa.get(lpa);
-            const oldPage = ssdState.pages.find(p => p.ppa === oldPpa);
-            if (oldPage) {
-                oldPage.state = 'invalid';
-                ssdState.ppaToLpa.set(oldPpa, lpa);
-                overwriteCount++;
-            }
-        }
-    }
+    let overwriteCount = 0; // 统计覆写次数
 
-    // 限制写入数量为当前PSB的空页数量
-    let writtenCount = 0;
-    for (let i = 0; i < lpaList.length && writtenCount < actualWriteCount; i++) {
+    // 连续执行N次写入单个LBA的操作
+    for (let i = 0; i < lpaList.length; i++) {
         const lpa = lpaList[i];
 
-        // 从当前psb获取第一个空闲页（按page 0-8 → die 0-3顺序）
-        let targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
+        // 记录覆写次数（通过检查写入前是否有映射）
+        if (ssdState.lpaToPpa.has(lpa)) {
+            overwriteCount++;
+        }
 
-        if (!targetPage) {
-            // 当前PSB没有空闲页（理论上不应该发生，因为已限制写入数量）
+        // 执行单个LBA写入
+        const writeResult = writeSingleLba(lpa, false); // 最后统一渲染
+
+        if (writeResult === null) {
+            // 写入失败（如无空闲页）
             utils.addLog(`随机写入中断: SB${ssdState.currentPsb}已满`, 'write');
             break;
         }
 
-        // 写入数据
-        targetPage.state = 'valid';
-        targetPage.lpa = lpa;
-        ssdState.lpaToPpa.set(lpa, targetPage.ppa);
-
-        pagesToWrite.push({lpa, ppa: targetPage.ppa, die: targetPage.die, sb: targetPage.sb});
-        writtenCount++;
-
-        // 检查是否需要触发GC
-        checkAndTriggerGC();
+        pagesToWrite.push(writeResult);
     }
 
-    utils.addLog(`随机写入 ${pagesToWrite.length} 页${overwriteCount > 0 ? ` (覆写${overwriteCount}个)` : ''}: LBA随机${overwriteCount > 0 ? ', 旧页已invalidate' : ''}`, 'write');
+    utils.addLog(`随机写入 ${pagesToWrite.length} 页${overwriteCount > 0 ? ` (覆写${overwriteCount}个)` : ''}: LBA随机`, 'write');
 
-    // 如果写入后PSB被写满，跳转到空页最多的PSB
-    if (psbWillBeFull) {
-        const bestPsb = state.selectBestPsb();
-        if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
-            utils.addLog(`PSB跳转: SB${ssdState.currentPsb}已满 → SB${bestPsb}(空页最多)`, 'write');
-            ssdState.currentPsb = bestPsb;
-        }
-    }
-
-    // 更新用户写入LBA页计数
-    if (pagesToWrite.length > 0) {
-        ssdState.userWriteCount += pagesToWrite.length;
-    }
-
-    // 更新被写入物理block（SB + Die组合）的写入计数器（用于计算write age）
-    // 只有写入valid页才算写入动作
-    const writtenBlocks = new Set(pagesToWrite.map(p => `${p.sb}_${p.die}`));
-    writtenBlocks.forEach(blockKey => {
-        const [sb, die] = blockKey.split('_').map(Number);
-        state.updateBlockWriteCounter(sb, die);
-    });
-
+    // 写入完成后统一保存状态和渲染
     state.saveState();
     window.SSDSimulator.renderer.renderSSD();
     utils.updateStatus();
@@ -284,5 +285,6 @@ function randomWrite(count) {
 // 导出模块
 window.SSDWriteStrategy = {
     sequentialWrite,
-    randomWrite
+    randomWrite,
+    writeSingleLba
 };

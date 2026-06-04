@@ -421,14 +421,12 @@ function showGCSteps(victimSB) {
             // GC次数只增加一次（整个GC操作完成后才计数）
             ssdState.gcTriggerCount++;
 
-            // GC完成后，更新psb写入指针指向空页最多的psb（包括OP空间）
-            const bestPsbAfterGC = state.selectBestPsb();
-            if (bestPsbAfterGC !== -1) {
-                if (bestPsbAfterGC !== ssdState.currentPsb) {
-                    utils.addLog(`PSB指针更新: → SB${bestPsbAfterGC}(空页最多)`, 'gc');
-                }
-                ssdState.currentPsb = bestPsbAfterGC;
+            // GC完成后，将PSB指针指向刚被清空的victim SB（它现在有最多的空页）
+            const victimSbIndex = victimSB.sb;
+            if (ssdState.currentPsb !== victimSbIndex) {
+                utils.addLog(`PSB指针更新: → SB${victimSbIndex}(GC回收后空页最多)`, 'gc');
             }
+            ssdState.currentPsb = victimSbIndex;
 
             // 重置弹窗位置并关闭
             const modal = document.getElementById('gcStepModal');

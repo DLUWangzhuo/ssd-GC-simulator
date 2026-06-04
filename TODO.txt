@@ -15,11 +15,6 @@ demo/
     └── main.js         # 入口组装模块
 
 
-'实时状态'面板中，添加2个sub item显示面板，分别记录'用户写入LBA页数目'和'SSD实际写入LBA数目'，
-其中'SSD实际写入LBA数目'='用户写入LBA页数目'+'GC重新写入有效LBA数目'
 
-
-修复bug：当用户要写入的LBA页数量大于当前物理super block(psb)的空白页数量时，仅写入该psb空白页数量的LBA
-
-1. 如果请求写入数量 <= 当前 PSB 空页数，限制写入数量为请求的数量，不跳转
-2. 如果请求写入数量 > 当前 PSB 空页数，只写入当前 PSB 的空页数，然后跳转（不继续写入）
+添加功能：给Physical Block Write Age vs Valid% 添加追加显示功能：
+能够显示valid% = f(block write age)的线性拟合直线（亮绿色），且支持显示/隐藏功能

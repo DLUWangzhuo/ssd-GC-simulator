@@ -773,6 +773,44 @@ header p {
     opacity: 0.6;
 }
 
+.fit-line-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid rgba(57, 255, 20, 0.4);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fit-line-toggle:hover {
+    background: rgba(57, 255, 20, 0.15);
+    border-color: rgba(57, 255, 20, 0.7);
+}
+
+.fit-line-toggle.active {
+    background: rgba(57, 255, 20, 0.25);
+    border-color: #39ff14;
+    color: #39ff14;
+}
+
+.fit-line-indicator {
+    width: 20px;
+    height: 2px;
+    background: #39ff14;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+}
+
+.fit-line-toggle.active .fit-line-indicator {
+    opacity: 1;
+}
+
 .stats-chart-container {
     background: rgba(0, 0, 0, 0.4);
     border-radius: 8px;
@@ -945,4 +983,34 @@ header p {
     display: flex;
     gap: 8px;
     width: 100%;
+}
+
+.fit-line-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 120px;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 10;
+}
+
+.fit-line-svg {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.fit-line-path {
+    fill: none;
+    stroke: #39ff14;
+    stroke-width: 2;
+    opacity: 0.9;
+}
+
+.fit-line-equation {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    fill: #39ff14;
 }

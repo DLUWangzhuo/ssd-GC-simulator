@@ -3,6 +3,66 @@
  * 负责SSD可视化界面和映射表的渲染
  */
 
+// 拟合线显示状态
+let showFitLine = false;
+
+/**
+ * 计算线性回归（最小二乘法）
+ * @param {Array} points - [{x, y}] 格式的点数组
+ * @returns {object} {slope, intercept, r2} 斜率、截距和R²值
+ */
+function linearRegression(points) {
+    if (points.length < 2) {
+        return { slope: 0, intercept: 0, r2: 0 };
+    }
+
+    const n = points.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+
+    for (const p of points) {
+        sumX += p.x;
+        sumY += p.y;
+        sumXY += p.x * p.y;
+        sumX2 += p.x * p.x;
+        sumY2 += p.y * p.y;
+    }
+
+    const denominator = n * sumX2 - sumX * sumX;
+    if (denominator === 0) {
+        return { slope: 0, intercept: sumY / n, r2: 0 };
+    }
+
+    const slope = (n * sumXY - sumX * sumY) / denominator;
+    const intercept = (sumY - slope * sumX) / n;
+
+    // 计算 R²
+    const meanY = sumY / n;
+    let ssTotal = 0, ssResidual = 0;
+    for (const p of points) {
+        const predicted = slope * p.x + intercept;
+        ssTotal += (p.y - meanY) * (p.y - meanY);
+        ssResidual += (p.y - predicted) * (p.y - predicted);
+    }
+    const r2 = ssTotal === 0 ? 0 : 1 - ssResidual / ssTotal;
+
+    return { slope, intercept, r2 };
+}
+
+/**
+ * 切换拟合线显示/隐藏
+ */
+function toggleFitLine() {
+    showFitLine = !showFitLine;
+
+    const toggleBtn = document.getElementById('fitLineToggle');
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('active', showFitLine);
+    }
+
+    // 重新渲染统计面板
+    updateBlockStatsPanel();
+}
+
 /**
  * 渲染SSD可视化界面
  */
@@ -132,8 +192,11 @@ function updateBlockStatsPanel() {
     const barsContainer = document.createElement('div');
     barsContainer.className = 'stats-bars-scroll-container';
 
+    // 用于拟合线计算的数据点
+    const dataPoints = [];
+
     // 渲染柱状图
-    stats.forEach(stat => {
+    stats.forEach((stat, index) => {
         const barContainer = document.createElement('div');
         barContainer.className = 'stats-bar-container';
 
@@ -145,6 +208,9 @@ function updateBlockStatsPanel() {
         const validPercent = (stat.validCount / stat.totalCount) * 100;
         const invalidPercent = (stat.invalidCount / stat.totalCount) * 100;
         const emptyPercent = (stat.emptyCount / stat.totalCount) * 100;
+
+        // 记录数据点（用于拟合线）
+        dataPoints.push({ x: index, y: validPercent });
 
         const validHeight = (validPercent / 100) * 120;
         const invalidHeight = (invalidPercent / 100) * 120;
@@ -207,6 +273,61 @@ function updateBlockStatsPanel() {
 
     chartWithAxis.appendChild(yAxisContainer);
     chartWithAxis.appendChild(barsContainer);
+
+    // 如果启用拟合线，添加SVG覆盖层
+    let svgContainer = null;
+    if (showFitLine && dataPoints.length >= 2) {
+        const regression = linearRegression(dataPoints);
+
+        // 每个柱子的宽度（min-width 40px + gap 4px）
+        const barWidth = 44;
+        const svgWidth = stats.length * barWidth;
+        const svgHeight = 120;
+
+        // 创建SVG容器
+        svgContainer = document.createElement('div');
+        svgContainer.className = 'fit-line-container';
+        svgContainer.style.cssText = 'position: absolute; top: 0; left: 40px; width: ' + svgWidth + 'px; height: ' + svgHeight + 'px; pointer-events: none; z-index: 10;';
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'fit-line-svg');
+        svg.style.cssText = 'width: ' + svgWidth + 'px; height: ' + svgHeight + 'px;';
+        svg.setAttribute('viewBox', '0 0 ' + svgWidth + ' ' + svgHeight);
+        svg.setAttribute('preserveAspectRatio', 'none');
+
+        // 计算拟合线端点
+        const getX = (index) => index * barWidth + barWidth / 2;
+        const getY = (validPercent) => svgHeight - validPercent * 1.2;
+
+        const x1 = getX(0);
+        const y1 = getY(Math.max(0, Math.min(100, regression.slope * 0 + regression.intercept)));
+        const x2 = getX(stats.length - 1);
+        const y2 = getY(Math.max(0, Math.min(100, regression.slope * (stats.length - 1) + regression.intercept)));
+
+        // 绘制拟合线
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        line.setAttribute('class', 'fit-line-path');
+        svg.appendChild(line);
+
+        // 添加拟合线方程文本
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', '5');
+        text.setAttribute('y', '12');
+        text.setAttribute('class', 'fit-line-equation');
+        const slopeStr = regression.slope >= 0 ? '+' + regression.slope.toFixed(2) : regression.slope.toFixed(2);
+        const interceptStr = regression.intercept >= 0 ? '+' + regression.intercept.toFixed(1) : regression.intercept.toFixed(1);
+        text.textContent = `y = ${slopeStr}x ${interceptStr} (R²=${regression.r2.toFixed(3)})`;
+        svg.appendChild(text);
+
+        svgContainer.appendChild(svg);
+        chartWithAxis.style.position = 'relative';
+        chartWithAxis.appendChild(svgContainer);
+    }
+
     chartContainer.appendChild(chartWithAxis);
 
     // 添加X轴标签
@@ -224,5 +345,6 @@ function updateBlockStatsPanel() {
 window.SSDRenderer = {
     renderSSD,
     updateMappingTable,
-    updateBlockStatsPanel
+    updateBlockStatsPanel,
+    toggleFitLine
 };
