@@ -5,6 +5,7 @@
 
 // 拟合线显示状态
 let showFitLine = false;
+let showTargetLine = false;
 
 /**
  * 计算线性回归（最小二乘法）
@@ -61,6 +62,38 @@ function toggleFitLine() {
 
     // 重新渲染统计面板
     updateBlockStatsPanel();
+}
+
+/**
+ * 切换目标拟合线显示/隐藏
+ */
+function toggleTargetLine() {
+    showTargetLine = !showTargetLine;
+
+    const toggleBtn = document.getElementById('targetLineToggle');
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('active', showTargetLine);
+    }
+
+    // 重新渲染统计面板
+    updateBlockStatsPanel();
+}
+
+/**
+ * 计算目标拟合线参数
+ * 直线过 [0, 100% - (2 * OP空间容量) / 总容量] 和 (maxX, 100%) 两点
+ * 坐标系与拟合线一致：x为数据点索引，y为validPercent
+ * @param {number} maxX - x轴最大值（数据点数量-1）
+ * @returns {object} {slope, intercept}
+ */
+function getTargetLineParams(maxX) {
+    // OP空间容量占比 = OP SuperBlocks / 总 SuperBlocks
+    const opRatio = CONFIG.opSuperBlocks / CONFIG.totalSuperBlocks;
+    // y轴截距：x=0时的y值 = 100% - 2 * OP占比
+    const intercept = Math.max(0, 100 - 2 * opRatio * 100);
+    // 斜率：过(maxX, 100%)点，所以 slope = (100 - intercept) / maxX
+    const slope = (100 - intercept) / maxX;
+    return { slope, intercept };
 }
 
 /**
@@ -274,18 +307,14 @@ function updateBlockStatsPanel() {
     chartWithAxis.appendChild(yAxisContainer);
     chartWithAxis.appendChild(barsContainer);
 
-    // 如果启用拟合线，添加SVG覆盖层
-    let svgContainer = null;
-    if (showFitLine && dataPoints.length >= 2) {
-        const regression = linearRegression(dataPoints);
-
-        // 每个柱子的宽度（min-width 40px + gap 4px）
+    // 如果启用拟合线或目标线，添加SVG覆盖层
+    if ((showFitLine && dataPoints.length >= 2) || showTargetLine) {
         const barWidth = 44;
         const svgWidth = stats.length * barWidth;
         const svgHeight = 120;
 
         // 创建SVG容器
-        svgContainer = document.createElement('div');
+        const svgContainer = document.createElement('div');
         svgContainer.className = 'fit-line-container';
         svgContainer.style.cssText = 'position: absolute; top: 0; left: 40px; width: ' + svgWidth + 'px; height: ' + svgHeight + 'px; pointer-events: none; z-index: 10;';
 
@@ -295,33 +324,65 @@ function updateBlockStatsPanel() {
         svg.setAttribute('viewBox', '0 0 ' + svgWidth + ' ' + svgHeight);
         svg.setAttribute('preserveAspectRatio', 'none');
 
-        // 计算拟合线端点
         const getX = (index) => index * barWidth + barWidth / 2;
         const getY = (validPercent) => svgHeight - validPercent * 1.2;
 
-        const x1 = getX(0);
-        const y1 = getY(Math.max(0, Math.min(100, regression.slope * 0 + regression.intercept)));
-        const x2 = getX(stats.length - 1);
-        const y2 = getY(Math.max(0, Math.min(100, regression.slope * (stats.length - 1) + regression.intercept)));
+        // 绘制拟合线（亮绿色）
+        if (showFitLine && dataPoints.length >= 2) {
+            const regression = linearRegression(dataPoints);
 
-        // 绘制拟合线
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', x1);
-        line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2);
-        line.setAttribute('y2', y2);
-        line.setAttribute('class', 'fit-line-path');
-        svg.appendChild(line);
+            const x1 = getX(0);
+            const y1 = getY(Math.max(0, Math.min(100, regression.slope * 0 + regression.intercept)));
+            const x2 = getX(stats.length - 1);
+            const y2 = getY(Math.max(0, Math.min(100, regression.slope * (stats.length - 1) + regression.intercept)));
 
-        // 添加拟合线方程文本
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', '5');
-        text.setAttribute('y', '12');
-        text.setAttribute('class', 'fit-line-equation');
-        const slopeStr = regression.slope >= 0 ? '+' + regression.slope.toFixed(2) : regression.slope.toFixed(2);
-        const interceptStr = regression.intercept >= 0 ? '+' + regression.intercept.toFixed(1) : regression.intercept.toFixed(1);
-        text.textContent = `y = ${slopeStr}x ${interceptStr} (R²=${regression.r2.toFixed(3)})`;
-        svg.appendChild(text);
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', y2);
+            line.setAttribute('class', 'fit-line-path');
+            svg.appendChild(line);
+
+            // 添加拟合线方程文本
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', '5');
+            text.setAttribute('y', '12');
+            text.setAttribute('class', 'fit-line-equation');
+            const slopeStr = regression.slope >= 0 ? '+' + regression.slope.toFixed(2) : regression.slope.toFixed(2);
+            const interceptStr = regression.intercept >= 0 ? '+' + regression.intercept.toFixed(1) : regression.intercept.toFixed(1);
+            text.textContent = `y = ${slopeStr}x ${interceptStr} (R²=${regression.r2.toFixed(3)})`;
+            svg.appendChild(text);
+        }
+
+        // 绘制目标拟合线（亮红色虚线）
+        if (showTargetLine) {
+            const maxX = stats.length - 1;
+            const target = getTargetLineParams(maxX);
+
+            const x1 = getX(0);
+            const y1 = getY(Math.max(0, Math.min(100, target.slope * 0 + target.intercept)));
+            const x2 = getX(maxX);
+            const y2 = getY(100); // 目标线终点y=100%
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', y2);
+            line.setAttribute('class', 'target-line-path');
+            svg.appendChild(line);
+
+            // 添加目标线方程文本
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', '5');
+            text.setAttribute('y', showFitLine ? '24' : '12');
+            text.setAttribute('class', 'target-line-equation');
+            const slopeStr = target.slope >= 0 ? '+' + target.slope.toFixed(2) : target.slope.toFixed(2);
+            const interceptStr = target.intercept >= 0 ? '+' + target.intercept.toFixed(1) : target.intercept.toFixed(1);
+            text.textContent = `目标: y = ${slopeStr}x ${interceptStr}`;
+            svg.appendChild(text);
+        }
 
         svgContainer.appendChild(svg);
         chartWithAxis.style.position = 'relative';
@@ -346,5 +407,6 @@ window.SSDRenderer = {
     renderSSD,
     updateMappingTable,
     updateBlockStatsPanel,
-    toggleFitLine
+    toggleFitLine,
+    toggleTargetLine
 };

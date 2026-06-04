@@ -811,6 +811,34 @@ header p {
     opacity: 1;
 }
 
+/* 目标拟合线按钮样式 */
+.fit-line-toggle.target {
+    border-color: rgba(0, 191, 255, 0.4);
+}
+
+.fit-line-toggle.target:hover {
+    background: rgba(0, 191, 255, 0.15);
+    border-color: rgba(0, 191, 255, 0.7);
+}
+
+.fit-line-toggle.target.active {
+    background: rgba(0, 191, 255, 0.25);
+    border-color: #00bfff;
+    color: #00bfff;
+}
+
+.target-line-indicator {
+    width: 20px;
+    height: 2px;
+    background: #00bfff;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+}
+
+.fit-line-toggle.target.active .target-line-indicator {
+    opacity: 1;
+}
+
 .stats-chart-container {
     background: rgba(0, 0, 0, 0.4);
     border-radius: 8px;
@@ -1013,4 +1041,19 @@ header p {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
     fill: #39ff14;
+}
+
+/* 目标拟合线样式 */
+.target-line-path {
+    fill: none;
+    stroke: #00bfff;
+    stroke-width: 2;
+    opacity: 0.9;
+    stroke-dasharray: 8, 4;
+}
+
+.target-line-equation {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    fill: #00bfff;
 }
