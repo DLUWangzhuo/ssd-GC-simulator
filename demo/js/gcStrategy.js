@@ -387,11 +387,19 @@ function showGCSteps(victimSB) {
                 }
             });
 
+            // 记录GC写回的有效页数量（在写回前保存，因为后面会清空）
+            const gcWriteBackCount = window.gcRamData ? window.gcRamData.length : 0;
+
             // 更新GC写回涉及物理block的写入计数器
             gcWrittenBlocks.forEach(blockKey => {
                 const [sb, die] = blockKey.split('_').map(Number);
                 state.updateBlockWriteCounter(sb, die);
             });
+
+            // 更新GC重新写入有效LBA计数（在写回完成后才计数）
+            if (gcWriteBackCount > 0) {
+                ssdState.gcWriteCount += gcWriteBackCount;
+            }
 
             window.gcRamData = null;
             window.SSDSimulator.renderer.renderSSD();

@@ -13,6 +13,8 @@ let ssdState = {
     historyIndex: -1,
     currentPsb: 0, // PSB指针，初始指向第一个super block
     gcTriggerCount: 0, // GC触发次数
+    userWriteCount: 0, // 用户写入LBA页数目
+    gcWriteCount: 0, // GC重新写入有效LBA数目
     blockWriteCounter: {}, // 每个物理block最近一次写入时的全局计数器值（用于计算write age），key格式：'sb_die'
     globalWriteCounter: 0 // 全局写入计数器，每次写入valid页时递增
 };
@@ -29,6 +31,8 @@ function initSSD() {
     ssdState.historyIndex = -1;
     ssdState.currentPsb = 0; // PSB指针初始指向第一个super block
     ssdState.gcTriggerCount = 0; // GC触发次数清零
+    ssdState.userWriteCount = 0; // 用户写入LBA页数目清零
+    ssdState.gcWriteCount = 0; // GC重新写入有效LBA数目清零
     ssdState.blockWriteCounter = {}; // 重置block写入年龄追踪
     ssdState.globalWriteCounter = 0; // 重置全局写入计数器
 
@@ -251,6 +255,8 @@ function saveState() {
         sequentialLpa: ssdState.sequentialLpa,
         currentPsb: ssdState.currentPsb,
         gcTriggerCount: ssdState.gcTriggerCount,
+        userWriteCount: ssdState.userWriteCount,
+        gcWriteCount: ssdState.gcWriteCount,
         blockWriteCounter: {...ssdState.blockWriteCounter},
         globalWriteCounter: ssdState.globalWriteCounter
     };
@@ -285,6 +291,8 @@ function undo() {
         ssdState.sequentialLpa = state.sequentialLpa;
         ssdState.currentPsb = state.currentPsb;
         ssdState.gcTriggerCount = state.gcTriggerCount;
+        ssdState.userWriteCount = state.userWriteCount;
+        ssdState.gcWriteCount = state.gcWriteCount;
         ssdState.blockWriteCounter = {...state.blockWriteCounter};
         ssdState.globalWriteCounter = state.globalWriteCounter;
 
@@ -310,6 +318,8 @@ function redo() {
         ssdState.sequentialLpa = state.sequentialLpa;
         ssdState.currentPsb = state.currentPsb;
         ssdState.gcTriggerCount = state.gcTriggerCount;
+        ssdState.userWriteCount = state.userWriteCount;
+        ssdState.gcWriteCount = state.gcWriteCount;
         ssdState.blockWriteCounter = {...state.blockWriteCounter};
         ssdState.globalWriteCounter = state.globalWriteCounter;
 

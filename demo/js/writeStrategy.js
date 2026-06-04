@@ -124,6 +124,11 @@ function sequentialWrite(count) {
 
     ssdState.sequentialLpa = currentLpa > CONFIG.userPages ? 1 : currentLpa;
 
+    // 更新用户写入LBA页计数
+    if (totalWritten > 0) {
+        ssdState.userWriteCount += totalWritten;
+    }
+
     // 更新被写入物理block（SB + Die组合）的写入计数器（用于计算write age）
     // 只有写入valid页才算写入动作
     const writtenBlocks = new Set(pagesToWrite.map(p => `${p.sb}_${p.die}`));
@@ -240,6 +245,11 @@ function randomWrite(count) {
     }
 
     utils.addLog(`随机写入 ${pagesToWrite.length} 页${overwriteCount > 0 ? ` (覆写${overwriteCount}个)` : ''}: LBA随机${overwriteCount > 0 ? ', 旧页已invalidate' : ''}`, 'write');
+
+    // 更新用户写入LBA页计数
+    if (pagesToWrite.length > 0) {
+        ssdState.userWriteCount += pagesToWrite.length;
+    }
 
     // 更新被写入物理block（SB + Die组合）的写入计数器（用于计算write age）
     // 只有写入valid页才算写入动作

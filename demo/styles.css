@@ -185,6 +185,23 @@ header p {
     color: var(--accent);
 }
 
+.status-item .value.success {
+    color: var(--success);
+}
+
+.status-item.sub-item {
+    background: rgba(255,255,255,0.03);
+    padding: 8px;
+}
+
+.status-item.sub-item .label {
+    font-size: 10px;
+}
+
+.status-item.sub-item .value {
+    font-size: 14px;
+}
+
 .log-container {
     max-height: 200px;
     overflow-y: auto;

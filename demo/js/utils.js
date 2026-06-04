@@ -42,11 +42,15 @@ function updateStatus() {
     const usedPages = window.SSDSimulator.state.getUsedPagesCount();
     const invalidPages = window.SSDSimulator.state.getInvalidPagesCount();
     const freeRatio = Math.round((freePages / userPages) * 100);
+    const { ssdState } = window.SSDSimulator.state;
 
     document.getElementById('freePages').textContent = freePages;
     document.getElementById('usedPages').textContent = usedPages;
     document.getElementById('invalidPages').textContent = invalidPages;
-    document.getElementById('gcTriggerCount').textContent = window.SSDSimulator.state.ssdState.gcTriggerCount;
+    document.getElementById('gcTriggerCount').textContent = ssdState.gcTriggerCount;
+    document.getElementById('userWriteCount').textContent = ssdState.userWriteCount;
+    document.getElementById('gcWriteCount').textContent = ssdState.gcWriteCount;
+    document.getElementById('totalWriteCount').textContent = ssdState.userWriteCount + ssdState.gcWriteCount;
 
     const ratioEl = document.getElementById('freeRatio');
     ratioEl.textContent = freeRatio + '%';
