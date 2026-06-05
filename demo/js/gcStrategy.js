@@ -312,28 +312,80 @@ function showGCSteps(victimSB) {
     window.gcVictimPages = victimPages;
     window.gcRamData = ramData;
     window.gcCurrentRamIndex = 0;
+    window.gcReadingAnimating = false; // 是否正在执行逐页读取动画
 
     window.gcStepNext = function() {
+        // 动画进行中时禁止点击"下一步"
+        if (window.gcReadingAnimating) return;
+
         currentStep++;
 
         if (currentStep === 2) {
-            // Step 2: 读取有效页到RAM（按指定顺序）
-            updateStepUI(2, '① 读取有效页到RAM',
-                `正在读取SB${victimSB.sb}的有效页到RAM...\n\n` +
-                `读取顺序:\n` +
-                `  SB${victimSB.sb} Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0\n` +
-                `  SB${victimSB.sb} Die0 Page1 → Die1 Page1 → Die2 Page1 → Die3 Page1\n` +
-                `  ... (无效页跳过)\n\n` +
-                `有效页列表:\n` +
-                ramData.slice(0, 5).map(d => `  SB${victimSB.sb} Die${d.die} Page${d.page} → LPA${d.lpa}`).join('\n') +
-                (ramData.length > 5 ? `\n  ... 共 ${ramData.length} 个有效页` : ''));
+            // Step 2: 读取有效页到RAM（按指定顺序）- 改为逐页动画
+            const descLines = [
+                `正在逐页读取SB${victimSB.sb}的有效页到RAM...\n\n`,
+                `读取顺序 (Die交错):\n`,
+                `  Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0\n`,
+                `  Die0 Page1 → Die1 Page1 → Die2 Page1 → Die3 Page1\n`,
+                `  ... (无效页跳过)\n\n`,
+                `有效页共 ${ramData.length} 个，逐页标记中...\n`
+            ];
 
-            // 将victim SB的有效页标记为"已读取"状态
-            validPages.forEach(page => {
-                page.state = 'readToRam';
-            });
+            updateStepUI(2, '① 读取有效页到RAM', descLines.join(''));
 
-            window.SSDSimulator.renderer.renderSSD();
+            // 禁用"下一步"按钮，动画完成后重新启用
+            const nextBtn = document.querySelector('#gcStepModal .btn-warning');
+            if (nextBtn) {
+                nextBtn.disabled = true;
+                nextBtn.textContent = '读取中...';
+            }
+
+            // 开始逐页动画
+            window.gcReadingAnimating = true;
+            let readIndex = 0;
+            const readDelay = 100; // 每页100ms
+
+            function readNextPage() {
+                if (readIndex >= ramData.length) {
+                    // 全部读取完毕
+                    window.gcReadingAnimating = false;
+                    if (nextBtn) {
+                        nextBtn.disabled = false;
+                        nextBtn.textContent = '下一步';
+                    }
+                    const doneDesc = [
+                        `✅ 读取完成！SB${victimSB.sb} 的 ${ramData.length} 个有效页已全部读入RAM\n\n`,
+                        `点击 "下一步" 继续执行GC...`
+                    ];
+                    document.getElementById('gcStepDesc').textContent = doneDesc.join('');
+                    return;
+                }
+
+                const data = ramData[readIndex];
+                // 通过ppa查找页面对象并标记为readToRam
+                const targetPage = victimPages.find(p => p.die === data.die && p.page === data.page);
+                if (targetPage) {
+                    targetPage.state = 'readToRam';
+                }
+
+                // 更新描述显示当前读取进度
+                const progressDesc = [
+                    `正在逐页读取SB${victimSB.sb}的有效页到RAM...\n\n`,
+                    `读取顺序 (Die交错):\n`,
+                    `  Die0 Page0 → Die1 Page0 → Die2 Page0 → Die3 Page0\n`,
+                    `  Die0 Page1 → Die1 Page1 → Die2 Page1 → Die3 Page1\n`,
+                    `  ... (无效页跳过)\n\n`,
+                    `当前进度: [${'█'.repeat(Math.floor(readIndex / Math.max(1, ramData.length / 20)))})${'░'.repeat(Math.max(0, 20 - Math.floor(readIndex / Math.max(1, ramData.length / 20))))}] ${readIndex + 1}/${ramData.length}\n`,
+                    `正在读取: SB${victimSB.sb} Die${data.die} Page${data.page} → LPA${data.lpa}`
+                ];
+                document.getElementById('gcStepDesc').textContent = progressDesc.join('');
+
+                window.SSDSimulator.renderer.renderSSD();
+                readIndex++;
+                setTimeout(readNextPage, readDelay);
+            }
+
+            readNextPage();
 
         } else if (currentStep === 3) {
             // Step 3: 清空GC目标psb
@@ -429,6 +481,7 @@ function showGCSteps(victimSB) {
             ssdState.currentPsb = victimSbIndex;
 
             // 重置弹窗位置并关闭
+            window.gcReadingAnimating = false;
             const modal = document.getElementById('gcStepModal');
             resetModalPosition(modal);
             document.getElementById('gcOverlay').classList.remove('active');

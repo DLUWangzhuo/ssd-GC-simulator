@@ -602,6 +602,12 @@ header p {
 .gc-step-modal p {
     margin-bottom: 24px;
     line-height: 1.6;
+    white-space: pre-wrap;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    max-height: 280px;
+    overflow-y: auto;
 }
 
 .gc-step-progress {
