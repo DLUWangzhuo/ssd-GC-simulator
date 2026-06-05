@@ -15,7 +15,8 @@
             typeof window.SSDWriteStrategy === 'undefined' ||
             typeof window.SSDGCStrategy === 'undefined' ||
             typeof window.SSDRenderer === 'undefined' ||
-            typeof window.SSDApp === 'undefined') {
+            typeof window.SSDApp === 'undefined' ||
+            typeof window.SSDScriptStrategy === 'undefined') {
             console.error('Required modules not loaded');
             return;
         }
@@ -33,6 +34,7 @@
             gc: window.SSDGCStrategy,
             renderer: window.SSDRenderer,
             app: window.SSDApp,
+            script: window.SSDScriptStrategy,
 
             // 便捷方法
             initSSD: function() {

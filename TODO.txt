@@ -1,19 +1,4 @@
-我在写一个可视化的SSD垃圾回收（GC）模拟器，
-【目录结构】
-demo/
-├── index.html          # 主入口（精简后的HTML）
-├── styles.css          # 样式文件
-├── ssd-gc-simulator.html # 原文件（保留备份）
-└── js/
-    ├── config.js       # 配置管理模块
-    ├── state.js        # 状态管理模块
-    ├── utils.js        # 工具函数模块
-    ├── writeStrategy.js    # 写入策略模块
-    ├── gcStrategy.js       # GC策略模块
-    ├── renderer.js     # 渲染模块
-    ├── app.js          # 前端交互模块
-    └── main.js         # 入口组装模块
+我现在在写一个SSD模拟器，阅读目录下的README.md可了解项目架构
 
 
-
-“Physical Block Write Age vs Valid%”中，直线坐标系的起始位置要和最左侧柱条的起始坐标（横坐标）对齐，直线坐标系末端位置要和最右侧柱条的最右边界横坐标刻度对齐。
+完成后更新2个README.md

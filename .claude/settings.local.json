@@ -7,7 +7,13 @@
       "Bash(npx playwright --version)",
       "Bash(npm install -g playwright)",
       "Bash(node --version)",
-      "Bash(cat \"d:/BackupFiles/zhuo.wang1/Desktop/SPRandom/SPEC.md\")"
+      "Bash(cat \"d:/BackupFiles/zhuo.wang1/Desktop/SPRandom/SPEC.md\")",
+      "Bash(python:*)",
+      "Bash(del:*)",
+      "Bash(/c/Users/zhuo.wang1/AppData/Local/Programs/Python/Python39/python -c \"import subprocess; r = subprocess.run([''where'', ''node''], capture_output=True, text=True, shell=True); print(r.stdout); print(r.stderr)\")",
+      "Bash(/c/Users/zhuo.wang1/AppData/Local/Programs/Python/Python39/python:*)",
+      "Bash(npx:*)",
+      "Bash(\"C:\\Users\\zhuo.wang1\\AppData\\Local\\Programs\\Python\\Python39\\python\":*)"
     ],
     "deny": [],
     "ask": []

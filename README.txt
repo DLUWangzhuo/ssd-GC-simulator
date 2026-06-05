@@ -1,1 +1,0 @@
-在浏览器中打开/demo/index.html 启动模拟器。

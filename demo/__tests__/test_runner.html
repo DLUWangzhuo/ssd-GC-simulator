@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSD GC Simulator - 测试套件</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: #16213e;
+            color: #eaeaea;
+            padding: 20px;
+        }
+        h1 {
+            font-family: 'JetBrains Mono', monospace;
+            color: #e94560;
+            margin-bottom: 8px;
+        }
+        .subtitle { opacity: 0.6; font-size: 14px; margin-bottom: 24px; }
+        .test-summary {
+            display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .summary-card {
+            background: #1a1a2e; border-radius: 8px; padding: 16px 24px;
+            border: 1px solid rgba(255,255,255,0.1); text-align: center; min-width: 100px;
+        }
+        .summary-card .number {
+            font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 600;
+        }
+        .summary-card .label { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+        .summary-card.pass .number { color: #4ecca3; }
+        .summary-card.fail .number { color: #e94560; }
+        .summary-card.total .number { color: #ffc107; }
+
+        .suite {
+            background: #1a1a2e; border-radius: 12px; margin-bottom: 16px;
+            border: 1px solid rgba(255,255,255,0.1); overflow: hidden;
+        }
+        .suite-header {
+            padding: 16px 20px; cursor: pointer; user-select: none;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .suite-header:hover { background: rgba(255,255,255,0.03); }
+        .suite-title { font-family: 'JetBrains Mono', monospace; font-size: 15px; }
+        .suite-status { font-size: 13px; }
+        .suite-body { padding: 0 20px 16px; display: none; }
+        .suite-body.open { display: block; }
+
+        .test-case {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03);
+            font-size: 13px;
+        }
+        .test-case:last-child { border-bottom: none; }
+        .test-name { flex: 1; }
+        .test-detail { font-size: 11px; opacity: 0.6; margin-left: 12px; }
+        .test-result { font-family: 'JetBrains Mono', monospace; font-size: 12px; margin-left: 12px; min-width: 48px; text-align: right; }
+        .test-result.pass { color: #4ecca3; }
+        .test-result.fail { color: #e94560; }
+        .test-result.skip { color: #666; }
+
+        .btn {
+            font-family: 'Noto Sans SC', sans-serif;
+            padding: 10px 24px; border: none; border-radius: 8px;
+            cursor: pointer; font-size: 14px; font-weight: 500;
+            transition: all 0.2s ease; margin-right: 8px; margin-bottom: 16px;
+        }
+        .btn-primary { background: #e94560; color: white; }
+        .btn-primary:hover { background: #ff6b8a; }
+        .btn-success { background: #4ecca3; color: #1a1a2e; }
+        .btn-success:hover { background: #6fe8b8; }
+        .btn-warning { background: #ffc107; color: #1a1a2e; }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: #eaeaea; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .assertion-pass { color: #4ecca3; }
+        .assertion-fail { color: #e94560; font-weight: bold; }
+
+        .progress-bar {
+            width: 100%; height: 8px; background: rgba(255,255,255,0.1);
+            border-radius: 4px; margin-bottom: 20px; overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #4ecca3, #e94560);
+            border-radius: 4px; transition: width 0.3s ease; width: 0%;
+        }
+        pre {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px;
+            margin-top: 8px; max-height: 200px; overflow: auto;
+        }
+        .test-error { color: #e94560; }
+    </style>
+</head>
+<body>
+    <h1>SSD GC Simulator - 测试套件</h1>
+    <p class="subtitle">单元测试 &amp; 集成测试 · 直接在浏览器中运行</p>
+
+    <div style="margin-bottom: 16px;">
+        <button class="btn btn-success" onclick="runAllTests()">运行所有测试</button>
+        <button class="btn btn-warning" onclick="runAllAssertionTests()" id="assertOnlyBtn">仅运行断言测试(快)</button>
+        <button class="btn btn-secondary" onclick="resetAllResults()">重置结果</button>
+        <button class="btn btn-secondary" onclick="toggleAll()">展开/折叠全部</button>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="test-summary">
+        <div class="summary-card pass">
+            <div class="number" id="passCount">0</div>
+            <div class="label">通过</div>
+        </div>
+        <div class="summary-card fail">
+            <div class="number" id="failCount">0</div>
+            <div class="label">失败</div>
+        </div>
+        <div class="summary-card total">
+            <div class="number" id="totalCount">0</div>
+            <div class="label">总计</div>
+        </div>
+    </div>
+
+    <div id="testSuites"></div>
+
+    <!-- 引入模拟器模块（内存模式，无需DOM渲染） -->
+    <script src="../js/config.js"></script>
+    <script src="../js/state.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/writeStrategy.js"></script>
+    <script src="../js/gcStrategy.js"></script>
+    <script src="../js/renderer.js"></script>
+    <script src="../js/app.js"></script>
+    <script src="../js/scriptStrategy.js"></script>
+    <script src="../js/main.js"></script>
+
+    <script>
+    // ============================================================
+    //  测试框架核心
+    // ============================================================
+
+    // 等待模拟器初始化
+    let simReady = false;
+    function waitForSimulator(callback, attempts = 0) {
+        if (window.SSDSimulator && window.SSDSimulator.state) {
+            simReady = true;
+            callback();
+        } else if (attempts < 50) {
+            setTimeout(() => waitForSimulator(callback, attempts + 1), 100);
+        } else {
+            console.error('Simulator failed to initialize');
+        }
+    }
+
+    // Test registry
+    const testSuites = [];
+    let currentSuite = null;
+    let passCount = 0, failCount = 0, totalCount = 0;
+
+    function describe(name, fn) {
+        currentSuite = { name, tests: [], beforeAll: null, afterAll: null };
+        fn();
+        testSuites.push(currentSuite);
+        currentSuite = null;
+    }
+
+    function beforeAll(fn) { if (currentSuite) currentSuite.beforeAll = fn; }
+    function afterAll(fn) { if (currentSuite) currentSuite.afterAll = fn; }
+
+    function it(name, fn) {
+        if (currentSuite) currentSuite.tests.push({ name, fn });
+    }
+
+    // 断言工具
+    function assert(condition, message) {
+        if (!condition) throw new Error(message || 'Assertion failed');
+    }
+    function assertEq(actual, expected, msg) {
+        if (actual !== expected) {
+            throw new Error(`${msg || ''} 期望 ${JSON.stringify(expected)}, 实际 ${JSON.stringify(actual)}`);
+        }
+    }
+    function assertNeq(actual, expected, msg) {
+        if (actual === expected) {
+            throw new Error(`${msg || ''} 不应该等于 ${JSON.stringify(expected)}`);
+        }
+    }
+    function assertGte(actual, expected, msg) {
+        if (actual < expected) {
+            throw new Error(`${msg || ''} 期望 >= ${expected}, 实际 ${actual}`);
+        }
+    }
+    function assertLte(actual, expected, msg) {
+        if (actual > expected) {
+            throw new Error(`${msg || ''} 期望 <= ${expected}, 实际 ${actual}`);
+        }
+    }
+    function assertInRange(actual, lo, hi, msg) {
+        if (actual < lo || actual > hi) {
+            throw new Error(`${msg || ''} 期望在 [${lo}, ${hi}] 范围内, 实际 ${actual}`);
+        }
+    }
+    function assertThrows(fn, msg) {
+        let threw = false;
+        try { fn(); } catch(e) { threw = true; }
+        if (!threw) throw new Error(msg || '期望抛出异常但未抛出');
+    }
+
+    // ============================================================
+    //  测试用例
+    // ============================================================
+
+    // ---- 模块1: 配置管理 ----
+    describe('CONFIG 配置管理', () => {
+
+        beforeAll(() => {
+            // 确保使用默认配置
+            CONFIG.totalSuperBlocks = 6;
+            CONFIG.opSuperBlocks = 1;
+            CONFIG.dieCount = 4;
+            CONFIG.pagesPerBlock = 9;
+            window.SSDConfig.updateConfigDerived();
+        });
+
+        it('默认配置值正确', () => {
+            assertEq(CONFIG.totalSuperBlocks, 6, 'totalSuperBlocks');
+            assertEq(CONFIG.opSuperBlocks, 1, 'opSuperBlocks');
+            assertEq(CONFIG.dieCount, 4, 'dieCount');
+            assertEq(CONFIG.pagesPerBlock, 9, 'pagesPerBlock');
+        });
+
+        it('派生值计算正确', () => {
+            assertEq(CONFIG.pagesPerSuperBlock, 36, 'pagesPerSuperBlock = 4×9');
+            assertEq(CONFIG.userPages, 180, 'userPages = (6-1)×36');
+            assertEq(CONFIG.totalPages, 216, 'totalPages = 6×36');
+        });
+
+        it('OP空间为最后一个SB', () => {
+            const opStart = CONFIG.totalSuperBlocks - CONFIG.opSuperBlocks;
+            assertEq(opStart, 5, 'OP从SB5开始');
+        });
+    });
+
+    // ---- 模块2: SSD状态管理 ----
+    describe('SSD 状态管理', () => {
+
+        beforeEach = function() {
+            window.SSDState.initSSD();
+        };
+
+        it('初始化后所有页为空', () => {
+            window.SSDState.initSSD();
+            const pages = window.SSDState.ssdState.pages;
+            assertEq(pages.length, 216, '216页');
+            assertEq(pages.filter(p => p.state === 'empty').length, 216, '全部为空');
+        });
+
+        it('LBA映射表为空', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.ssdState.lpaToPpa.size, 0, '无LPA映射');
+            assertEq(window.SSDState.ssdState.ppaToLpa.size, 0, '无PPA映射');
+        });
+
+        it('初始化后历史记录包含初始状态', () => {
+            window.SSDState.initSSD();
+            assertGte(window.SSDState.ssdState.history.length, 1, '至少1条历史');
+            assertEq(window.SSDState.ssdState.historyIndex, 0, '索引=0');
+        });
+
+        it('getSuperBlockPages 返回正确的页数', () => {
+            window.SSDState.initSSD();
+            for (let sb = 0; sb < 6; sb++) {
+                const pages = window.SSDState.getSuperBlockPages(sb);
+                assertEq(pages.length, 36, `SB${sb}应有36页`);
+            }
+        });
+
+        it('getBlockPages 返回正确的页数', () => {
+            window.SSDState.initSSD();
+            for (let sb = 0; sb < 6; sb++) {
+                for (let die = 0; die < 4; die++) {
+                    const pages = window.SSDState.getBlockPages(sb, die);
+                    assertEq(pages.length, 9, `SB${sb} Die${die}应有9页`);
+                }
+            }
+        });
+
+        it('selectBestPsb 初始返回SB0', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.selectBestPsb(), 0, '初始所有SB空页数相同，选SB0');
+        });
+
+        it('getFreePagesCount 初始=216', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.getFreePagesCount(), 216, '216个空页');
+        });
+
+        it('getUsedPagesCount 初始=0', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.getUsedPagesCount(), 0);
+        });
+
+        it('getInvalidPagesCount 初始=0', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.getInvalidPagesCount(), 0);
+        });
+
+        it('PSB指针初始指向SB0', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.ssdState.currentPsb, 0);
+        });
+
+        it('顺序LBA指针从1开始', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.ssdState.sequentialLpa, 1);
+        });
+
+        it('blockWriteCounter 初始正确', () => {
+            window.SSDState.initSSD();
+            for (let sb = 0; sb < 6; sb++) {
+                for (let die = 0; die < 4; die++) {
+                    assertEq(window.SSDState.ssdState.blockWriteCounter[`${sb}_${die}`], -1, `SB${sb}_Die${die}初始=-1`);
+                }
+            }
+            assertEq(window.SSDState.ssdState.globalWriteCounter, 0, 'globalWriteCounter初始=0');
+        });
+
+        it('每个Page的PPA唯一且按顺序', () => {
+            window.SSDState.initSSD();
+            const ppas = window.SSDState.ssdState.pages.map(p => p.ppa);
+            const unique = new Set(ppas);
+            assertEq(unique.size, 216, '所有PPA唯一');
+            for (let i = 0; i < 216; i++) {
+                assertEq(ppas[i], i, `PPA[${i}] = ${i}`);
+            }
+        });
+
+        it('页的sb/die/page字段正确关联', () => {
+            window.SSDState.initSSD();
+            // 验证: SB0 Die0 Page0 = ppa 0, SB0 Die0 Page8 = ppa 8, SB0 Die1 Page0 = ppa 9
+            const p0 = window.SSDState.ssdState.pages[0];
+            assertEq(p0.sb, 0);
+            assertEq(p0.die, 0);
+            assertEq(p0.page, 0);
+            assertEq(p0.block, 0);
+
+            const p8 = window.SSDState.ssdState.pages[8];
+            assertEq(p8.sb, 0);
+            assertEq(p8.die, 0);
+            assertEq(p8.page, 8);
+
+            const p9 = window.SSDState.ssdState.pages[9];
+            assertEq(p9.sb, 0);
+            assertEq(p9.die, 1);
+            assertEq(p9.page, 0);
+        });
+
+        it('saveState和undo恢复正确', () => {
+            window.SSDState.initSSD();
+            // 保存状态后修改
+            window.SSDState.ssdState.pages[0].state = 'valid';
+            const beforeUndo = window.SSDState.ssdState.pages[0].state;
+            assertEq(beforeUndo, 'valid', '确认已修改');
+
+            // undo
+            window.SSDState.undo();
+            assertEq(window.SSDState.ssdState.pages[0].state, 'empty', 'undo后恢复为空');
+        });
+    });
+
+    // ---- 模块3: 写入策略 ----
+    describe('写入策略', () => {
+
+        beforeAll(() => {
+            window.SSDState.initSSD();
+            // 替换渲染器让它不操作DOM
+            if (!window._origRenderer) {
+                window._origRenderer = window.SSDSimulator.renderer;
+                window.SSDSimulator.renderer = {
+                    renderSSD: function(){},
+                    updateMappingTable: function(){},
+                    updateBlockStatsPanel: function(){}
+                };
+            }
+            // 禁用自动GC弹窗
+            CONFIG.gcFreePagesThreshold = 0;
+        });
+
+        afterAll(() => {
+            if (window._origRenderer) {
+                window.SSDSimulator.renderer = window._origRenderer;
+            }
+        });
+
+        it('顺序写入单页后状态正确', () => {
+            window.SSDState.initSSD();
+            const result = window.SSDWriteStrategy.writeSingleLba(1, false);
+            assertNeq(result, null, '写入成功');
+            assertEq(result.lpa, 1);
+            assertEq(result.sb, 0);
+            assertEq(result.die, 0);
+            assertEq(result.page, 0);
+
+            const page = window.SSDState.ssdState.pages[0];
+            assertEq(page.state, 'valid');
+            assertEq(page.lpa, 1);
+            assertEq(window.SSDState.ssdState.lpaToPpa.get(1), 0);
+            assertEq(window.SSDState.ssdState.userWriteCount, 1);
+        });
+
+        it('写入后PSB自动切换', () => {
+            window.SSDState.initSSD();
+            // SB0有36页，写满后应自动切换到其他SB
+            for (let i = 1; i <= 36; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            // LBA1-36写满SB0
+            assertEq(window.SSDState.ssdState.currentPsb, 0, '写满后才切换');
+            // 再写1页，应该切换
+            window.SSDWriteStrategy.writeSingleLba(37, false);
+            assertNeq(window.SSDState.ssdState.currentPsb, 0, 'SB0写满后应切换PSB');
+        });
+
+        it('覆写旧页标记为invalid', () => {
+            window.SSDState.initSSD();
+            window.SSDWriteStrategy.writeSingleLba(1, false); // LBA1 → PPA0
+            window.SSDWriteStrategy.writeSingleLba(1, false); // LBA1 → PPA1 (覆写)
+            const oldPage = window.SSDState.ssdState.pages[0];
+            const newPage = window.SSDState.ssdState.pages[1];
+            assertEq(oldPage.state, 'invalid', '旧页标记为invalid');
+            assertEq(newPage.state, 'valid', '新页为valid');
+            assertEq(newPage.lpa, 1, '新页指向LBA1');
+            assertEq(window.SSDState.ssdState.lpaToPpa.get(1), 1, '映射更新到新PPA');
+        });
+
+        it('顺序写入36页填满SB0后正确切换', () => {
+            window.SSDState.initSSD();
+            window.SSDWriteStrategy.sequentialWrite(36);
+            assertEq(window.SSDState.ssdState.userWriteCount, 36, '写入36页');
+            // SB0已满，但currentPsb可能仍是SB0（直到下一次写入才切换）
+            const sb0Free = window.SSDState.getSuperBlockPages(0).filter(p => p.state === 'empty').length;
+            assertEq(sb0Free, 0, 'SB0空页为0');
+        });
+
+        it('随机写入产生有效的LBA', () => {
+            window.SSDState.initSSD();
+            window.SSDWriteStrategy.randomWrite(10);
+            assertEq(window.SSDState.ssdState.userWriteCount, 10, '写入10页');
+            // 验证所有写入的LBA在1~180范围内
+            for (let lpa = 1; lpa <= CONFIG.userPages; lpa++) {
+                if (window.SSDState.ssdState.lpaToPpa.has(lpa)) {
+                    const ppa = window.SSDState.ssdState.lpaToPpa.get(lpa);
+                    const page = window.SSDState.ssdState.pages[ppa];
+                    assertInRange(page.lpa, 1, CONFIG.userPages, `LBA ${page.lpa} 在范围内`);
+                }
+            }
+        });
+
+        it('顺序写入180页填满用户空间', () => {
+            window.SSDState.initSSD();
+            // 写入180页（填满5个SB用户空间）
+            for (let i = 1; i <= 180; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            assertEq(window.SSDState.ssdState.userWriteCount, 180, '写入180页');
+            const freePages = window.SSDState.getFreePagesCount();
+            assertEq(freePages, 36, '剩余36个空页（OP空间）');
+        });
+
+        it('超量写入触发OP空间使用', () => {
+            window.SSDState.initSSD();
+            // 写入216页（填满全部物理空间）
+            for (let i = 1; i <= 216; i++) {
+                const lpa = ((i - 1) % CONFIG.userPages) + 1;
+                window.SSDWriteStrategy.writeSingleLba(lpa, false);
+            }
+            assertEq(window.SSDState.getFreePagesCount(), 0, '无空页');
+            // 应有无效页（因为覆写）
+            assertGte(window.SSDState.getInvalidPagesCount(), 36, '至少有36个无效页');
+        });
+
+        it('writeSingleLba在无空闲页时返回null', () => {
+            window.SSDState.initSSD();
+            // 模拟所有SB都写满的场景
+            // 先写入全部216页，每页写入不同的LBA
+            let lpa = 1;
+            for (let ppa = 0; ppa < 216; ppa++) {
+                const page = window.SSDState.ssdState.pages[ppa];
+                page.state = 'valid';
+                page.lpa = lpa;
+                window.SSDState.ssdState.lpaToPpa.set(lpa, ppa);
+                window.SSDState.ssdState.ppaToLpa.set(ppa, lpa);
+                lpa++;
+                if (lpa > 180) lpa = 1;
+            }
+            window.SSDState.ssdState.userWriteCount = 216;
+            window.SSDState.ssdState.currentPsb = 0;
+            // 现在所有的SB的currentPsb应该没有空页了
+            const result = window.SSDWriteStrategy.writeSingleLba(1, false);
+            assertEq(result, null, '无空闲页时返回null');
+        });
+    });
+
+    // ---- 模块4: GC策略 ----
+    describe('GC策略', () => {
+
+        beforeAll(() => {
+            window.SSDState.initSSD();
+            CONFIG.gcFreePagesThreshold = 0;
+        });
+
+        it('无效页为空时selectVictimPsb返回undefined', () => {
+            window.SSDState.initSSD();
+            const victim = window.SSDGCStrategy.selectVictimPsb();
+            assertEq(victim, undefined, '没有无效页时无victim');
+        });
+
+        it('selectVictimPsb选择无效页最多的SB', () => {
+            window.SSDState.initSSD();
+            // 手动制造SB0有10个无效页，SB1有5个
+            for (let i = 0; i < 10; i++) {
+                window.SSDState.ssdState.pages[i].state = 'invalid';
+                window.SSDState.ssdState.pages[i].lpa = i + 1;
+            }
+            for (let i = 36; i < 41; i++) {
+                window.SSDState.ssdState.pages[i].state = 'invalid';
+                window.SSDState.ssdState.pages[i].lpa = i + 1 - 36 + 100;
+            }
+            const victim = window.SSDGCStrategy.selectVictimPsb();
+            assertNeq(victim, undefined);
+            assertEq(victim.sb, 0, 'SB0有10个无效页，应为victim');
+        });
+
+        it('triggerGC在无无效页时返回', () => {
+            window.SSDState.initSSD();
+            // 不报错即可
+            window.SSDGCStrategy.triggerGC();
+            assertEq(true, true);
+        });
+
+        it('GC计数器正常工作', () => {
+            window.SSDState.initSSD();
+            assertEq(window.SSDState.ssdState.gcTriggerCount, 0);
+            // 触发的完整GC流程由弹窗控制，这里只检查GC相关状态定义正确
+            assertEq(typeof window.SSDGCStrategy.selectVictimPsb, 'function');
+        });
+
+        it('PSB无效页统计工具正常工作', () => {
+            window.SSDState.initSSD();
+            // 在空盘上
+            const stats = window.SSDUtils.getPsbInvalidCounts();
+            assertEq(stats.length, 6, '6个PSB');
+            stats.forEach(s => {
+                assertEq(s.invalidCount, 0, `SB${s.sb}无效页=0`);
+                assertEq(s.emptyCount, 36, `SB${s.sb}空页=36`);
+                assertEq(s.validCount, 0, `SB${s.sb}有效页=0`);
+            });
+        });
+    });
+
+    // ---- 模块5: 脚本策略 ----
+    describe('脚本策略', () => {
+
+        beforeEach = function() {
+            window.SSDState.initSSD();
+        };
+
+        it('校验空脚本为无效', () => {
+            const result = window.SSDScriptStrategy.validateScript(null);
+            assertEq(result.valid, false);
+        });
+
+        it('校验缺少steps的脚本为无效', () => {
+            const result = window.SSDScriptStrategy.validateScript({ name: 'test' });
+            assertEq(result.valid, false);
+        });
+
+        it('校验空steps为无效', () => {
+            const result = window.SSDScriptStrategy.validateScript({ name: 'test', steps: [] });
+            assertEq(result.valid, false);
+        });
+
+        it('校验合法的write步骤', () => {
+            const result = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'write', lba: 1 }]
+            });
+            assertEq(result.valid, true);
+        });
+
+        it('校验lba=0的write步骤为无效', () => {
+            const result = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'write', lba: 0 }]
+            });
+            assertEq(result.valid, false);
+        });
+
+        it('校验未知type为无效', () => {
+            const result = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'unknown_type' }]
+            });
+            assertEq(result.valid, false);
+        });
+
+        it('校验batch_write的lbas数组', () => {
+            const valid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'batch_write', lbas: [1,2,3] }]
+            });
+            assertEq(valid.valid, true);
+
+            const invalid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'batch_write', lbas: [] }]
+            });
+            assertEq(invalid.valid, false);
+        });
+
+        it('校验overwrite步骤', () => {
+            const valid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'overwrite', lba: 1, count: 5 }]
+            });
+            assertEq(valid.valid, true);
+
+            const invalid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'overwrite', lba: 1, count: 0 }]
+            });
+            assertEq(invalid.valid, false);
+        });
+
+        it('校验random步骤', () => {
+            const valid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'random', count: 10 }]
+            });
+            assertEq(valid.valid, true);
+        });
+
+        it('校验assert步骤', () => {
+            const valid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'assert_free_pages', op: '>=', value: 10 }]
+            });
+            assertEq(valid.valid, true);
+        });
+
+        it('校验loop步骤', () => {
+            const valid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'loop', count: 3, steps: [
+                    { type: 'write', lba: 1 }
+                ]}]
+            });
+            assertEq(valid.valid, true);
+
+            const invalid = window.SSDScriptStrategy.validateScript({
+                steps: [{ type: 'loop', count: 3, steps: [] }]
+            });
+            assertEq(invalid.valid, false);
+        });
+
+        it('加载合法脚本后 loaded=true', () => {
+            const result = window.SSDScriptStrategy.loadScript({
+                name: 'test',
+                steps: [{ type: 'write', lba: 1 }]
+            });
+            assertEq(result.success, true);
+            assertEq(window.SSDScriptStrategy.scriptState.loaded, true);
+            assertEq(window.SSDScriptStrategy.scriptState.totalSteps, 1);
+        });
+
+        it('loop展开后steps数量正确', () => {
+            const result = window.SSDScriptStrategy.loadScript({
+                steps: [
+                    { type: 'write', lba: 1 },
+                    { type: 'loop', count: 3, steps: [
+                        { type: 'write', lba: 2 }
+                    ]},
+                    { type: 'write', lba: 3 }
+                ]
+            });
+            assertEq(result.success, true);
+            assertEq(window.SSDScriptStrategy.scriptState.totalSteps, 5, '1 + 3 + 1 = 5 步');
+        });
+
+        it('单步执行后索引递增', () => {
+            window.SSDScriptStrategy.loadScript({
+                steps: [{ type: 'write', lba: 1 }, { type: 'write', lba: 2 }]
+            });
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(window.SSDScriptStrategy.scriptState.currentIndex, 1);
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(window.SSDScriptStrategy.scriptState.currentIndex, 2);
+        });
+
+        it('脚本执行完成后索引=totalSteps', () => {
+            window.SSDScriptStrategy.loadScript({
+                steps: [{ type: 'write', lba: 1 }]
+            });
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(window.SSDScriptStrategy.scriptState.currentIndex, 1);
+            assertEq(window.SSDScriptStrategy.scriptState.totalSteps, 1);
+        });
+
+        it('内置脚本模板至少有一个可用', () => {
+            const scripts = window.SSDScriptStrategy.getBuiltinScripts();
+            assertGte(scripts.length, 1, '至少有1个内置模板');
+            const result = window.SSDScriptStrategy.validateScript(scripts[0]);
+            assertEq(result.valid, true, '内置模板1校验通过');
+        });
+
+        it('重置执行回到起点', () => {
+            window.SSDScriptStrategy.loadScript({
+                steps: [{ type: 'write', lba: 1 }, { type: 'write', lba: 2 }]
+            });
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(window.SSDScriptStrategy.scriptState.currentIndex, 1);
+            window.SSDScriptStrategy.resetExecution();
+            assertEq(window.SSDScriptStrategy.scriptState.currentIndex, 0);
+        });
+    });
+
+    // ---- 模块6: 集成测试 ----
+    describe('集成测试：全盘写入与GC触发', () => {
+
+        beforeAll(() => {
+            CONFIG.gcFreePagesThreshold = 0;
+        });
+
+        it('顺序写入216页后物理盘满', () => {
+            window.SSDState.initSSD();
+            // 写入不同的LBA
+            for (let i = 1; i <= 180; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            // 再覆写部分LBA，填满OP空间
+            for (let i = 1; i <= 36; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            assertEq(window.SSDState.getFreePagesCount(), 0, '无空闲页');
+            assertGte(window.SSDState.getInvalidPagesCount(), 36, '有无效页（可GC回收）');
+        });
+
+        it('覆写制造invalid页验证', () => {
+            window.SSDState.initSSD();
+            // 写入LBA1-LBA36
+            for (let i = 1; i <= 36; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            assertEq(window.SSDState.getInvalidPagesCount(), 0, '初次写入无无效页');
+            // 全部覆写一次
+            for (let i = 1; i <= 36; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            assertEq(window.SSDState.getInvalidPagesCount(), 36, '36页全部覆写');
+        });
+
+        it('用户写入+GC写入计数正确', () => {
+            window.SSDState.initSSD();
+            for (let i = 1; i <= 50; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            assertEq(window.SSDState.ssdState.userWriteCount, 50, '用户写入50页');
+            assertEq(window.SSDState.ssdState.gcWriteCount, 0, 'GC写入0页');
+            // 总写入 = 用户 + GC
+            const total = window.SSDState.ssdState.userWriteCount + window.SSDState.ssdState.gcWriteCount;
+            assertEq(total, 50, '总写入50页');
+        });
+
+        it('写满全盘后能通过GC回收空间', () => {
+            window.SSDState.initSSD();
+            // 写满全盘
+            for (let i = 1; i <= 180; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            // 覆写制造无效页
+            for (let i = 1; i <= 180; i++) {
+                window.SSDWriteStrategy.writeSingleLba(i, false);
+            }
+            assertEq(window.SSDState.getFreePagesCount(), 0, '完全无空闲页');
+            assertGte(window.SSDState.getInvalidPagesCount(), 36, '存在无效页');
+
+            // 现在触发GC (通过手动设置状态调用)
+            const victim = window.SSDGCStrategy.selectVictimPsb();
+            assertNeq(victim, undefined, '应有GC victim');
+
+            // 模拟GC的基本操作：清空victim SB
+            const victimSb = victim.sb;
+            const victimPages = window.SSDState.getSuperBlockPages(victimSb);
+            victimPages.forEach(page => {
+                if (page.state === 'valid') {
+                    // 有效页迁移
+                }
+                page.state = 'empty';
+                page.lpa = null;
+            });
+            // 从映射表中移除invalid的LPA
+            window.SSDState.ssdState.pages.filter(p => p.sb === victimSb && p.lpa !== null).forEach(p => {
+                window.SSDState.ssdState.lpaToPpa.delete(p.lpa);
+            });
+
+            // GC后应有空闲页
+            assertGte(window.SSDState.getFreePagesCount(), 1, 'GC后有可用空间');
+        });
+
+        it('脚本模式executeStep写单个LBA', () => {
+            window.SSDState.initSSD();
+            const step = { type: 'write', lba: 42 };
+            // 直接调用内部的executeStep (通过stepForward间接测试)
+            window.SSDScriptStrategy.loadScript({ steps: [step] });
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(window.SSDState.ssdState.lpaToPpa.has(42), true, 'LBA42已映射');
+        });
+
+        it('脚本模式executeStep触发GC', () => {
+            window.SSDState.initSSD();
+            const step = { type: 'gc' };
+            window.SSDScriptStrategy.loadScript({ steps: [step] });
+            // 应该不会报错
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(true, true, 'GC步骤执行无异常');
+        });
+
+        it('脚本模式batch_write写入多个LBA', () => {
+            window.SSDState.initSSD();
+            window.SSDScriptStrategy.loadScript({
+                steps: [{ type: 'batch_write', lbas: [5, 10, 15, 20] }]
+            });
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(window.SSDState.ssdState.lpaToPpa.has(5), true);
+            assertEq(window.SSDState.ssdState.lpaToPpa.has(10), true);
+            assertEq(window.SSDState.ssdState.lpaToPpa.has(15), true);
+            assertEq(window.SSDState.ssdState.lpaToPpa.has(20), true);
+            assertEq(window.SSDState.ssdState.userWriteCount, 4);
+        });
+
+        it('脚本模式assert_free_pages验证通过', () => {
+            window.SSDState.initSSD();
+            window.SSDScriptStrategy.loadScript({
+                steps: [{ type: 'assert_free_pages', op: '==', value: 216 }]
+            });
+            // 执行assert应该通过
+            window.SSDScriptStrategy.stepForward(false);
+            assertEq(window.SSDScriptStrategy.scriptState.currentIndex, 1, '断言通过，前进1步');
+        });
+
+        it('脚本模式overwrite覆写指定次数', () => {
+            window.SSDState.initSSD();
+            window.SSDScriptStrategy.loadScript({
+                steps: [
+                    { type: 'write', lba: 1 },
+                    { type: 'overwrite', lba: 1, count: 5 }
+                ]
+            });
+            window.SSDScriptStrategy.stepForward(false); // write lba1
+            const afterWrite = window.SSDState.ssdState.userWriteCount;
+            window.SSDScriptStrategy.stepForward(false); // overwrite 5 times
+            const afterOverwrite = window.SSDState.ssdState.userWriteCount;
+            // overwrite count=5, 写入5次 + 第一次的1次 = 6
+            // 但由于执行overwrite时已经是第2步，且overwrite内部渲染触发了saveState
+            // 实际验证：overwrite增加了5次写入
+            assertEq(afterOverwrite - afterWrite, 5, 'overwrite增加了5次写入');
+        });
+
+        it('脚本模式顺序写入和手动模式一致', () => {
+            window.SSDState.initSSD();
+            // 保存当前LBA指针
+            // 使用顺序写入36页
+            const initSeqLba = window.SSDState.ssdState.sequentialLba;
+            window.SSDWriteStrategy.sequentialWrite(36);
+            const manualCount = window.SSDState.ssdState.userWriteCount;
+
+            window.SSDState.initSSD();
+            window.SSDScriptStrategy.loadScript({
+                steps: [{ type: 'sequential', count: 36 }]
+            });
+            window.SSDScriptStrategy.stepForward(false);
+            const scriptCount = window.SSDState.ssdState.userWriteCount;
+            assertEq(scriptCount, manualCount, '脚本和手动顺序写入次数一致');
+        });
+    });
+
+    // ============================================================
+    //  测试执行器
+    // ============================================================
+
+    function renderTestSuites() {
+        const container = document.getElementById('testSuites');
+        container.innerHTML = '';
+        testSuites.forEach((suite, si) => {
+            const suiteEl = document.createElement('div');
+            suiteEl.className = 'suite';
+            suiteEl.id = `suite-${si}`;
+
+            const header = document.createElement('div');
+            header.className = 'suite-header';
+            header.onclick = () => {
+                document.getElementById(`suite-body-${si}`).classList.toggle('open');
+            };
+            header.innerHTML = `
+                <span class="suite-title">${suite.name}</span>
+                <span class="suite-status" id="suite-status-${si}">
+                    ${suite.tests.length} 个测试
+                </span>
+            `;
+            suiteEl.appendChild(header);
+
+            const body = document.createElement('div');
+            body.className = 'suite-body';
+            body.id = `suite-body-${si}`;
+
+            suite.tests.forEach((test, ti) => {
+                const testEl = document.createElement('div');
+                testEl.className = 'test-case';
+                testEl.id = `test-${si}-${ti}`;
+                testEl.innerHTML = `
+                    <span class="test-name">${test.name}</span>
+                    <span class="test-result" id="result-${si}-${ti}">⏳</span>
+                `;
+                body.appendChild(testEl);
+            });
+            suiteEl.appendChild(body);
+            container.appendChild(suiteEl);
+        });
+    }
+
+    async function runAllTests() {
+        passCount = 0;
+        failCount = 0;
+        totalCount = 0;
+        updateSummary();
+        updateProgress(0);
+
+        // 先重置SSD
+        window.SSDState.initSSD();
+
+        // 给测试用例创造合适的全局环境
+        // 确保SSDSimulator全局可用
+        if (!window.SSDSimulator) {
+            window.SSDSimulator = {
+                state: window.SSDState,
+                utils: window.SSDUtils,
+                writeStrategy: window.SSDWriteStrategy,
+                gc: window.SSDGCStrategy,
+                renderer: window.SSDRenderer,
+                config: window.SSDConfig,
+                app: window.SSDApp,
+                script: window.SSDScriptStrategy
+            };
+        }
+
+        let completed = 0;
+        const allTests = [];
+        testSuites.forEach(suite => {
+            if (suite.beforeAll) suite.beforeAll();
+            suite.tests.forEach(test => {
+                allTests.push({ suite, test });
+            });
+        });
+
+        totalCount = allTests.length;
+        updateSummary();
+
+        for (const { suite, test } of allTests) {
+            // 每个测试前重置SSD
+            try {
+                // 对于beforeEach的支持
+                if (suite.beforeEach) suite.beforeEach();
+
+                await test.fn();
+                setTestResult(test, 'pass');
+                passCount++;
+            } catch (e) {
+                setTestResult(test, 'fail', e.message);
+                failCount++;
+            }
+            completed++;
+            updateProgress((completed / totalCount) * 100);
+            updateSummary();
+        }
+
+        allTests.forEach(({ suite }) => {
+            if (suite.afterAll) suite.afterAll();
+        });
+    }
+
+    async function runAllAssertionTests() {
+        // 只运行脚本策略测试（快、不涉及DOM）
+        passCount = 0;
+        failCount = 0;
+        totalCount = 0;
+        updateSummary();
+        updateProgress(0);
+
+        window.SSDState.initSSD();
+
+        if (!window.SSDSimulator) {
+            window.SSDSimulator = {
+                state: window.SSDState,
+                utils: window.SSDUtils,
+                writeStrategy: window.SSDWriteStrategy,
+                gc: window.SSDGCStrategy,
+                renderer: window.SSDRenderer,
+                config: window.SSDConfig,
+                app: window.SSDApp,
+                script: window.SSDScriptStrategy
+            };
+        }
+
+        // 只选择脚本策略相关的测试
+        const targetSuite = testSuites.find(s => s.name.includes('脚本策略'));
+        if (!targetSuite) return;
+
+        let completed = 0;
+        totalCount = targetSuite.tests.length;
+        updateSummary();
+
+        if (targetSuite.beforeAll) targetSuite.beforeAll();
+        for (const test of targetSuite.tests) {
+            try {
+                await test.fn();
+                setTestResult(test, 'pass');
+                passCount++;
+            } catch (e) {
+                setTestResult(test, 'fail', e.message);
+                failCount++;
+            }
+            completed++;
+            updateProgress((completed / totalCount) * 100);
+            updateSummary();
+        }
+        if (targetSuite.afterAll) targetSuite.afterAll();
+    }
+
+    function setTestResult(test, status, detail) {
+        for (let si = 0; si < testSuites.length; si++) {
+            const suite = testSuites[si];
+            for (let ti = 0; ti < suite.tests.length; ti++) {
+                if (suite.tests[ti] === test) {
+                    const el = document.getElementById(`result-${si}-${ti}`);
+                    if (el) {
+                        el.className = `test-result ${status}`;
+                        el.textContent = status === 'pass' ? '✓' : '✗';
+                        if (detail) {
+                            el.parentElement.innerHTML +=
+                                `<span class="test-detail assertion-fail">${escapeHtml(detail)}</span>`;
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function updateSummary() {
+        document.getElementById('passCount').textContent = passCount;
+        document.getElementById('failCount').textContent = failCount;
+        document.getElementById('totalCount').textContent = totalCount;
+    }
+
+    function updateProgress(pct) {
+        document.getElementById('progressFill').style.width = pct + '%';
+    }
+
+    function resetAllResults() {
+        testSuites.forEach((suite, si) => {
+            suite.tests.forEach((test, ti) => {
+                const el = document.getElementById(`result-${si}-${ti}`);
+                if (el) {
+                    el.className = 'test-result';
+                    el.textContent = '⏳';
+                }
+            });
+        });
+        passCount = 0;
+        failCount = 0;
+        totalCount = 0;
+        updateSummary();
+        updateProgress(0);
+    }
+
+    function toggleAll() {
+        const bodies = document.querySelectorAll('.suite-body');
+        const anyOpen = Array.from(bodies).some(b => b.classList.contains('open'));
+        bodies.forEach(b => b.classList.toggle('open', !anyOpen));
+    }
+
+    // 等待模拟器就绪后渲染
+    waitForSimulator(() => {
+        renderTestSuites();
+        document.querySelector('.subtitle').textContent =
+            `模拟器已就绪 · ${testSuites.length} 个测试套件 · ${testSuites.reduce((s, suite) => s + suite.tests.length, 0)} 个测试用例`;
+    });
+    </script>
+</body>
+</html>

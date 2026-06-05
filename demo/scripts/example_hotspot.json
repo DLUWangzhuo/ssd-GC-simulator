@@ -1,0 +1,19 @@
+{
+  "name": "热点区域覆写测试",
+  "description": "对LBA 1-5热点区域反复写入，制造大量无效页触发GC\nLBA范围: 1-180",
+  "steps": [
+    { "type": "sequential", "count": 180, "desc": "填满全盘(180页)" },
+    { "type": "loop", "count": 5, "steps": [
+      { "type": "write", "lba": 1, "desc": "覆写热点 LBA 1" },
+      { "type": "write", "lba": 2, "desc": "覆写热点 LBA 2" },
+      { "type": "write", "lba": 3, "desc": "覆写热点 LBA 3" },
+      { "type": "write", "lba": 4, "desc": "覆写热点 LBA 4" },
+      { "type": "write", "lba": 5, "desc": "覆写热点 LBA 5" }
+    ], "desc": "循环覆写热点5轮" },
+    { "type": "sequential", "count": 36, "desc": "继续写入触发GC" },
+    { "type": "loop", "count": 3, "steps": [
+      { "type": "write", "lba": 1, "desc": "GC后继续覆写 LBA 1" },
+      { "type": "write", "lba": 2, "desc": "GC后继续覆写 LBA 2" }
+    ], "desc": "GC后继续覆写3轮" }
+  ]
+}

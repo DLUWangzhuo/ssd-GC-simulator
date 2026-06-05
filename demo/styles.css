@@ -1300,3 +1300,209 @@ header p {
 .main-layout.has-floating .control-panel {
     /* 保留fixed定位覆盖grid布局 */
 }
+
+/* ===== 脚本模式样式 ===== */
+
+/* 模式切换标签 */
+.mode-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    padding: 3px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+}
+
+.mode-tab {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.6;
+}
+
+.mode-tab:hover {
+    opacity: 0.9;
+    background: rgba(255,255,255,0.08);
+}
+
+.mode-tab.active {
+    opacity: 1;
+    background: var(--accent);
+    color: white;
+}
+
+/* 脚本编辑器文本域 */
+.script-editor {
+    width: 100%;
+    height: 140px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.4);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    resize: vertical;
+    tab-size: 2;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.script-editor:focus {
+    border-color: var(--accent);
+}
+
+.script-editor::placeholder {
+    color: rgba(255,255,255,0.3);
+}
+
+/* 脚本工具栏 */
+.script-toolbar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.script-toolbar .btn-icon {
+    font-size: 11px;
+    padding: 6px 10px;
+}
+
+/* 脚本名称标签 */
+.script-name-label {
+    color: var(--success);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+}
+
+/* 进度条 */
+.script-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+    margin: 8px 0;
+    overflow: hidden;
+}
+
+.script-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--success), var(--accent));
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.script-progress-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-align: center;
+    opacity: 0.6;
+    margin-bottom: 8px;
+}
+
+/* 步骤控制按钮组 */
+.script-step-control {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+}
+
+.script-step-control .btn-icon {
+    flex: 1;
+    font-size: 10px;
+    padding: 6px 4px;
+    text-align: center;
+    min-width: 0;
+}
+
+/* 脚本选项 */
+.script-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 8px 10px;
+    margin: 8px 0;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    align-items: center;
+}
+
+.script-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+.script-option input[type="range"] {
+    width: 60px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.script-option input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+.script-option input[type="checkbox"] {
+    accent-color: var(--success);
+}
+
+.speed-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    min-width: 32px;
+    text-align: center;
+}
+
+/* 脚本日志容器 */
+.script-log-container {
+    max-height: 150px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    margin-top: 8px;
+}
+
+.script-log-container .log-entry {
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+/* 危险按钮（停止） */
+.btn-danger {
+    background: var(--accent);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #ff6b8a;
+    transform: translateY(-1px);
+}

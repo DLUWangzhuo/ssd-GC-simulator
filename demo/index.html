@@ -77,65 +77,133 @@
                         </button>
                     </div>
 
-                    <div class="control-section">
-                        <h3>顺序写入</h3>
-                        <div class="btn-group">
-                            <button class="btn btn-success" onclick="sequentialWrite(1)">
-                                <span>LBA顺序(1起)</span> 写 1 页
-                            </button>
-                            <button class="btn btn-success" onclick="sequentialWrite(9)">
-                                <span>LBA顺序(1起)</span> 写 1 块 (9页)
-                            </button>
-                            <button class="btn btn-success" onclick="sequentialWrite(36)">
-                                <span>LBA顺序(1起)</span> 写 1 SB (36页)
-                            </button>
-                        </div>
+                    <!-- 操作模式切换 -->
+                    <div class="mode-tabs">
+                        <button class="mode-tab active" id="modeManual" onclick="switchMode('manual')">手动操作</button>
+                        <button class="mode-tab" id="modeScript" onclick="switchMode('script')">脚本执行</button>
                     </div>
 
-                    <div class="control-section">
-                        <h3>随机写入</h3>
-                        <div class="btn-group">
-                            <button class="btn btn-primary" onclick="randomWrite(1)">
-                                <span>随机LBA(1-<span id="randomLbaMax">180</span>)</span> 写 1 页
-                            </button>
-                            <button class="btn btn-primary" onclick="randomWrite(9)">
-                                <span>随机LBA(1-<span id="randomLbaMax2">180</span>)</span> 写 1 块 (9页)
-                            </button>
-                            <button class="btn btn-primary" onclick="randomWrite(36)">
-                                <span>随机LBA(1-<span id="randomLbaMax3">180</span>)</span> 写 1 SB (36页)
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="control-section">
-                        <h3>GC 控制</h3>
-                        <div class="btn-group">
-                            <button class="btn btn-warning" onclick="triggerGC()">
-                                手动触发 GC
-                            </button>
-                            <div style="font-size: 10px; opacity: 0.6; margin-top: 4px;">
-                                自动触发: 空白页&lt;=阈值
+                    <!-- 手动模式 -->
+                    <div id="manualModePanel">
+                        <div class="control-section">
+                            <h3>顺序写入</h3>
+                            <div class="btn-group">
+                                <button class="btn btn-success" onclick="sequentialWrite(1)">
+                                    <span>LBA顺序(1起)</span> 写 1 页
+                                </button>
+                                <button class="btn btn-success" onclick="sequentialWrite(9)">
+                                    <span>LBA顺序(1起)</span> 写 1 块 (9页)
+                                </button>
+                                <button class="btn btn-success" onclick="sequentialWrite(36)">
+                                    <span>LBA顺序(1起)</span> 写 1 SB (36页)
+                                </button>
                             </div>
                         </div>
-                        <div class="gc-threshold">
-                            <label>GC空白页阈值:</label>
-                            <input type="number" id="gcFreePagesThreshold" value="0" min="0" max="216" onchange="updateGCTreshold()">
-                            <span>页 (0=满时触发)</span>
+
+                        <div class="control-section">
+                            <h3>随机写入</h3>
+                            <div class="btn-group">
+                                <button class="btn btn-primary" onclick="randomWrite(1)">
+                                    <span>随机LBA(1-<span id="randomLbaMax">180</span>)</span> 写 1 页
+                                </button>
+                                <button class="btn btn-primary" onclick="randomWrite(9)">
+                                    <span>随机LBA(1-<span id="randomLbaMax2">180</span>)</span> 写 1 块 (9页)
+                                </button>
+                                <button class="btn btn-primary" onclick="randomWrite(36)">
+                                    <span>随机LBA(1-<span id="randomLbaMax3">180</span>)</span> 写 1 SB (36页)
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="control-section">
+                            <h3>GC 控制</h3>
+                            <div class="btn-group">
+                                <button class="btn btn-warning" onclick="triggerGC()">
+                                    手动触发 GC
+                                </button>
+                                <div style="font-size: 10px; opacity: 0.6; margin-top: 4px;">
+                                    自动触发: 空白页&lt;=阈值
+                                </div>
+                            </div>
+                            <div class="gc-threshold">
+                                <label>GC空白页阈值:</label>
+                                <input type="number" id="gcFreePagesThreshold" value="0" min="0" max="216" onchange="updateGCTreshold()">
+                                <span>页 (0=满时触发)</span>
+                            </div>
+                        </div>
+
+                        <div class="control-section">
+                            <h3>历史记录</h3>
+                            <div class="btn-group">
+                                <button class="btn btn-secondary btn-icon" onclick="undo()" id="undoBtn">
+                                    上一步 (Undo)
+                                </button>
+                                <button class="btn btn-secondary btn-icon" onclick="redo()" id="redoBtn">
+                                    下一步 (Redo)
+                                </button>
+                                <button class="btn btn-secondary btn-icon" onclick="resetSSD()">
+                                    重置 SSD
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="control-section">
-                        <h3>历史记录</h3>
-                        <div class="btn-group">
-                            <button class="btn btn-secondary btn-icon" onclick="undo()" id="undoBtn">
-                                上一步 (Undo)
-                            </button>
-                            <button class="btn btn-secondary btn-icon" onclick="redo()" id="redoBtn">
-                                下一步 (Redo)
-                            </button>
-                            <button class="btn btn-secondary btn-icon" onclick="resetSSD()">
-                                重置 SSD
-                            </button>
+                    <!-- 脚本模式 -->
+                    <div id="scriptModePanel" style="display: none;">
+                        <div class="control-section">
+                            <div class="script-toolbar">
+                                <button class="btn btn-secondary btn-icon" onclick="window.SSDScriptStrategy.exportScript()">📥 导出</button>
+                                <label class="btn btn-secondary btn-icon" style="cursor: pointer;">
+                                    📤 导入
+                                    <input type="file" accept=".json" style="display:none;" onchange="importScriptFile(event)">
+                                </label>
+                                <button class="btn btn-secondary btn-icon" onclick="showBuiltinScripts()">📋 模板</button>
+                            </div>
+                        </div>
+
+                        <div class="control-section">
+                            <h3>脚本编辑器</h3>
+                            <textarea id="scriptEditor" class="script-editor" placeholder="在此粘贴JSON脚本...">{
+    "name": "示例脚本",
+    "description": "简单写入测试",
+    "steps": [
+        { "type": "write", "lba": 1, "desc": "写入 LBA 1" },
+        { "type": "sequential", "count": 36, "desc": "顺序写入 36 页" }
+    ]
+}</textarea>
+                            <button class="btn btn-success" onclick="loadScriptFromEditor()" style="width:100%; margin-top: 8px;">加载脚本</button>
+                        </div>
+
+                        <div class="control-section" id="scriptControls" style="display:none;">
+                            <h3>脚本: <span id="scriptName" class="script-name-label">-</span></h3>
+                            <div class="script-progress-bar">
+                                <div class="script-progress-fill" id="scriptProgress" style="width: 0%;"></div>
+                            </div>
+                            <div class="script-progress-text" id="scriptProgressText">0 / 0</div>
+
+                            <div class="script-step-control">
+                                <button class="btn btn-secondary btn-icon" onclick="window.SSDScriptStrategy.resetAll()">⟲ 复位</button>
+                                <button class="btn btn-success btn-icon" id="scriptStepBtn" onclick="scriptStepOnce()">▶ 单步</button>
+                                <button class="btn btn-primary btn-icon" id="scriptRunBtn" onclick="scriptRunSteps(1)">▶▶ 1步</button>
+                                <button class="btn btn-warning btn-icon" id="scriptRunAllBtn" onclick="scriptRunAll()">▶▶▶ 全速</button>
+                                <button class="btn btn-danger btn-icon" id="scriptStopBtn" style="display:none;" onclick="window.SSDScriptStrategy.abort()">■ 停止</button>
+                            </div>
+
+                            <div class="script-options">
+                                <label class="script-option">
+                                    <input type="checkbox" id="scriptAutoGC" checked>
+                                    自动GC
+                                </label>
+                                <label class="script-option">
+                                    速度:
+                                    <input type="range" id="scriptSpeed" min="0" max="10" value="5">
+                                    <span id="scriptSpeedLabel" class="speed-label">中</span>
+                                </label>
+                            </div>
+
+                            <div class="script-log-container" id="scriptLogContainer">
+                                <div class="log-entry" style="opacity: 0.5;">脚本日志将显示在这里</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -320,6 +388,154 @@
     <script src="js/gcStrategy.js"></script>
     <script src="js/renderer.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/scriptStrategy.js"></script>
     <script src="js/main.js"></script>
+
+    <!-- 脚本模式全局函数 -->
+    <script>
+    // 速度名称映射表
+    const speedNames = ['极慢','很慢','慢','较慢','中','较快','快','很快','极快','最快','跳过'];
+    let speedSliderInitialized = false;
+
+    /**
+     * 初始化速度滑块和自动GC复选框（只初始化一次，避免重复绑定）
+     */
+    function initScriptControls() {
+        if (speedSliderInitialized) return;
+
+        const speedSlider = document.getElementById('scriptSpeed');
+        const speedLabel = document.getElementById('scriptSpeedLabel');
+        const autoGCCheckbox = document.getElementById('scriptAutoGC');
+
+        if (speedSlider && speedLabel) {
+            // 初始化速度滑块值
+            speedSlider.value = window.SSDScriptStrategy.scriptState.speed;
+            speedLabel.textContent = speedNames[speedSlider.value];
+
+            speedSlider.addEventListener('input', function() {
+                const val = parseInt(this.value);
+                window.SSDScriptStrategy.scriptState.speed = val;
+                speedLabel.textContent = speedNames[val];
+            });
+        }
+
+        if (autoGCCheckbox) {
+            // 初始化复选框状态
+            autoGCCheckbox.checked = window.SSDScriptStrategy.scriptState.autoGC;
+            autoGCCheckbox.addEventListener('change', function() {
+                window.SSDScriptStrategy.scriptState.autoGC = this.checked;
+            });
+        }
+
+        speedSliderInitialized = true;
+    }
+
+    // 模式切换
+    function switchMode(mode) {
+        const manualPanel = document.getElementById('manualModePanel');
+        const scriptPanel = document.getElementById('scriptModePanel');
+        const manualTab = document.getElementById('modeManual');
+        const scriptTab = document.getElementById('modeScript');
+
+        if (mode === 'script') {
+            manualPanel.style.display = 'none';
+            scriptPanel.style.display = 'block';
+            manualTab.classList.remove('active');
+            scriptTab.classList.add('active');
+            initScriptControls();
+        } else {
+            manualPanel.style.display = 'block';
+            scriptPanel.style.display = 'none';
+            scriptTab.classList.remove('active');
+            manualTab.classList.add('active');
+        }
+    }
+
+    // 从编辑器加载脚本
+    function loadScriptFromEditor() {
+        const editor = document.getElementById('scriptEditor');
+        const result = window.SSDScriptStrategy.loadScript(editor.value);
+        if (result.success) {
+            document.getElementById('scriptControls').style.display = 'block';
+            window.SSDScriptStrategy.updateUI();
+        } else {
+            alert('脚本加载失败:\n' + result.errors.join('\n'));
+        }
+    }
+
+    // 从文件导入脚本
+    function importScriptFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        window.SSDScriptStrategy.loadFromFile(file).then(result => {
+            document.getElementById('scriptControls').style.display = 'block';
+            // 同步到编辑器
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    document.getElementById('scriptEditor').value = JSON.stringify(parsed, null, 2);
+                } catch(e) {}
+            };
+            reader.readAsText(file);
+            window.SSDScriptStrategy.updateUI();
+        }).catch(err => {
+            alert('导入失败:\n' + (err.errors || ['未知错误']).join('\n'));
+        });
+        event.target.value = '';
+    }
+
+    // 单步执行
+    function scriptStepOnce() {
+        window.SSDScriptStrategy.stepForward(false);
+    }
+
+    // 执行N步
+    function scriptRunSteps(count) {
+        window.SSDScriptStrategy.runSteps(count);
+    }
+
+    // 全速执行所有步骤
+    function scriptRunAll() {
+        const total = window.SSDScriptStrategy.scriptState.totalSteps;
+        const current = window.SSDScriptStrategy.scriptState.currentIndex;
+        const remaining = total - current;
+        if (remaining > 0) {
+            window.SSDScriptStrategy.runSteps(remaining);
+        } else {
+            window.SSDSimulator.utils.addLog('脚本已全部执行完毕，无需继续执行', 'gc');
+        }
+    }
+
+    // 显示内置模板
+    function showBuiltinScripts() {
+        const scripts = window.SSDScriptStrategy.getBuiltinScripts();
+        let menu = '选择内置脚本模板:\n\n';
+        scripts.forEach((s, i) => {
+            menu += `${i + 1}. ${s.name}\n   ${s.description}\n`;
+        });
+        menu += `\n请输入编号 (1-${scripts.length}):`;
+        const choice = prompt(menu);
+        if (choice) {
+            const idx = parseInt(choice) - 1;
+            if (idx >= 0 && idx < scripts.length) {
+                const script = scripts[idx];
+                document.getElementById('scriptEditor').value = JSON.stringify(script, null, 2);
+                const loadResult = window.SSDScriptStrategy.loadScript(script);
+                if (loadResult.success) {
+                    document.getElementById('scriptControls').style.display = 'block';
+                    window.SSDScriptStrategy.updateUI();
+                }
+            } else {
+                alert('无效选择');
+            }
+        }
+    }
+
+    // 页面加载后初始化脚本控件
+    document.addEventListener('DOMContentLoaded', function() {
+        initScriptControls();
+    });
+    </script>
 </body>
 </html>
