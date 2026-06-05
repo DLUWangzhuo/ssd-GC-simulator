@@ -1225,9 +1225,8 @@ header p {
     color: var(--accent);
 }
 
-/* 浮窗状态 - 操作控制面板整体浮起 */
-.control-panel.floating .panel:first-child,
-.control-panel.floating .panel:last-child {
+/* 浮窗状态 - 只隐藏SSD结构概览（第一个panel） */
+.control-panel.floating .panel:first-child {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease;
