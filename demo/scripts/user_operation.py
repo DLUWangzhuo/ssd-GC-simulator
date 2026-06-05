@@ -21,6 +21,7 @@
 import json
 import argparse
 import random
+import inspect
 from fill_sequential import ScriptBuilder, generate_script as generate_sequential_script
 from fill_random import generate_script as generate_random_script
 
@@ -37,7 +38,7 @@ from fill_random import generate_script as generate_random_script
 #    ctx.assert_free_pages(op, value)   断言空闲页数
 # ====================================================================
 
-def user_operations(ctx, total_pages=216):
+def user_operations(ctx, total_pages=720):
     """
     自定义操作 —— 按需修改此函数。
 
@@ -54,7 +55,7 @@ def user_operations(ctx, total_pages=216):
 #  预设例程（开箱即用）
 # ====================================================================
 
-def sequential_fill_all(ctx, total_pages=216):
+def sequential_fill_all(ctx, total_pages=720):
     """
     预设 1：顺序写满物理全盘（用户空间 + OP 空间）。
     每页一条 write 指令，LBA 从 1 到 user_pages 循环。
@@ -64,7 +65,7 @@ def sequential_fill_all(ctx, total_pages=216):
         ctx.write(lba, desc=f"顺序写入 LBA {lba} ({i + 1}/{total_pages})")
 
 
-def random_fill_all(ctx, total_pages=216, user_pages=180):
+def random_fill_all(ctx, total_pages=720, user_pages=576):
     """
     预设 2：随机写满物理全盘（用户空间 + OP 空间）。
     每页一条 write 指令，LBA 在 [1, user_pages] 内均匀随机。
@@ -74,7 +75,7 @@ def random_fill_all(ctx, total_pages=216, user_pages=180):
         ctx.write(lba, desc=f"随机写入 LBA {lba} ({i + 1}/{total_pages})")
 
 
-def random_fill_multi_round(ctx, total_pages=216, user_pages=180):
+def random_fill_multi_round(ctx, total_pages=720, user_pages=576):
     """
     预设 3：一轮随机填充，配合 generate_random_script(rounds=2) 使用。
     此函数只写一轮，多轮逻辑由框架层的 rounds 参数处理。
@@ -181,68 +182,70 @@ def main():
     parser = argparse.ArgumentParser(description="用户操作脚本生成器")
     parser.add_argument("--type", choices=["seq", "random", "sprandom"], default="seq",
                         help="预设类型: seq=顺序填充, random=随机填充, sprandom=SPRandom单遍预处理 (默认: seq)")
-    parser.add_argument("--total-pages", type=int, default=216,
-                        help="物理盘总页数 (默认: 216)")
-    parser.add_argument("--user-pages", type=int, default=180,
-                        help="用户空间页数 (默认: 180，仅 random/sprandom 类型有效)")
+    parser.add_argument("--total-pages", type=int, default=None,
+                        help=f"物理盘总页数 (默认: {inspect.signature(sprandom_fill).parameters['total_pages'].default})")
+    parser.add_argument("--user-pages", type=int, default=None,
+                        help=f"用户空间页数 (默认: {inspect.signature(sprandom_fill).parameters['user_pages'].default}，仅 random/sprandom 类型有效)")
     parser.add_argument("--rounds", type=int, default=2,
                         help="写入轮数 (默认: 2，仅 random 类型有效)")
     parser.add_argument("--seed", type=int, default=None,
                         help="随机种子 (默认: 随机，仅 random 类型有效)")
     parser.add_argument("--divide", type=int, default=0,
                         help="分批粒度 (默认: 0=不分批，仅 seq 类型有效)")
-    parser.add_argument("--regions", type=int, default=10,
-                        help="SPRandom 区域数 (默认: 10，仅 sprandom 类型有效)")
+    parser.add_argument("--regions", type=int, default=None,
+                        help=f"SPRandom 区域数 (默认: {inspect.signature(sprandom_fill).parameters['num_regions'].default}，仅 sprandom 类型有效)")
     parser.add_argument("-o", "--output", default=None,
                         help="输出文件路径 (默认: 自动生成)")
     args = parser.parse_args()
 
     if args.type == "seq":
-        output = args.output or f"seq_fill_{args.total_pages}pages.json"
+        _total = args.total_pages if args.total_pages is not None else inspect.signature(sequential_fill_all).parameters['total_pages'].default
+        output = args.output or f"seq_fill_{_total}pages.json"
         script = generate_sequential_script(
             sequential_fill_all,
-            total_pages=args.total_pages,
+            total_pages=_total,
             divide_by=args.divide if args.divide > 0 else None
         )
         print(f"[OK] 顺序填充脚本已生成: {output}")
 
     elif args.type == "sprandom":
-        output = args.output or f"sprandom_fill_{args.total_pages}pages_{args.regions}regions.json"
+        _total = args.total_pages if args.total_pages is not None else inspect.signature(sprandom_fill).parameters['total_pages'].default
+        _user = args.user_pages if args.user_pages is not None else inspect.signature(sprandom_fill).parameters['user_pages'].default
+        _regions = args.regions if args.regions is not None else inspect.signature(sprandom_fill).parameters['num_regions'].default
+        output = args.output or f"sprandom_fill_{_total}pages_{_regions}regions.json"
 
-        # 使用 generate_sequential_script 但传入 sprandom_fill
-        # 注意：由于 sprandom_fill 不接受 divide_by 参数，直接调用 generate_script 逻辑
         from fill_sequential import ScriptBuilder as SeqBuilder
-        ctx = SeqBuilder(user_pages=args.user_pages)
+        ctx = SeqBuilder(user_pages=_user)
 
-        # 如果设置了种子，保证可复现
         if args.seed is not None:
             random.seed(args.seed)
 
-        sprandom_fill(ctx, total_pages=args.total_pages,
-                      user_pages=args.user_pages, num_regions=args.regions)
+        sprandom_fill(ctx, total_pages=_total,
+                      user_pages=_user, num_regions=_regions)
 
-        # 自动添加断言
-        ctx.assert_write_count("==", args.total_pages,
-                               desc=f"验证用户写入次数 = {args.total_pages}")
+        ctx.assert_write_count("==", _total,
+                               desc=f"验证用户写入次数 = {_total}")
 
         script = ctx.build(
-            name=f"SPRandom 预处理 ({args.total_pages}页, {args.regions}区域)",
+            name=f"SPRandom 预处理 ({_total}页, {_regions}区域)",
             description=(
                 f"SPRandom 单遍快速预处理模拟器"
-                f"\n算法: 物理容量={args.total_pages}页 | 用户={args.user_pages}页 | OP={args.total_pages-args.user_pages}页"
-                f"\n区域: {args.regions}个 | 重叠分布: Desnoyers递减免"
+                f"\n算法: 物理容量={_total}页 | 用户={_user}页 | OP={_total-_user}页"
+                f"\n区域: {_regions}个 | 重叠分布: Desnoyers递减免"
                 f"\n一次遍历同时完成填盘与稳态分布模拟"
             )
         )
         seed_info = f", 种子={args.seed}" if args.seed is not None else ""
-        print(f"[OK] SPRandom 预处理脚本已生成: {output} ({args.regions}区域{seed_info})")
+        print(f"[OK] SPRandom 预处理脚本已生成: {output} ({_regions}区域{seed_info})")
 
     else:  # random
-        output = args.output or f"rand_fill_{args.total_pages}pages_{args.rounds}rounds.json"
+        _total = args.total_pages if args.total_pages is not None else inspect.signature(random_fill_multi_round).parameters['total_pages'].default
+        _user = args.user_pages if args.user_pages is not None else inspect.signature(random_fill_multi_round).parameters['user_pages'].default
+        output = args.output or f"rand_fill_{_total}pages_{args.rounds}rounds.json"
         script = generate_random_script(
             random_fill_multi_round,
-            total_pages=args.total_pages,
-            user_pages=args.user_pages,
+            total_pages=_total,
+            user_pages=_user,
             rounds=args.rounds,
             seed=args.seed
         )
