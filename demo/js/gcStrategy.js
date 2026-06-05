@@ -31,6 +31,20 @@ function initModalDrag() {
     if (gcStepHandle && gcStepModal) {
         makeDraggable(gcStepHandle, gcStepModal);
     }
+
+    // 初始化动画速度滑条
+    const speedSlider = document.getElementById('gcAnimSpeed');
+    const speedLabel = document.getElementById('gcAnimSpeedLabel');
+    if (speedSlider && speedLabel) {
+        // 映射: 1→慢(250ms), 5→中(50ms/默认), 10→快(25ms)
+        const speedNames = ['', '极慢', '很慢', '慢', '较慢', '中', '较快', '快', '很快', '极快', '最快'];
+        function updateSpeedLabel() {
+            const val = parseInt(speedSlider.value);
+            speedLabel.textContent = speedNames[val] || val;
+        }
+        speedSlider.addEventListener('input', updateSpeedLabel);
+        updateSpeedLabel();
+    }
 }
 
 /**
@@ -314,6 +328,13 @@ function showGCSteps(victimSB) {
     window.gcCurrentRamIndex = 0;
     window.gcReadingAnimating = false; // 是否正在执行逐页读取动画
 
+    // 获取动画延迟（从速度滑条读取）
+    function getAnimDelay() {
+        const slider = document.getElementById('gcAnimSpeed');
+        const val = slider ? parseInt(slider.value) : 5;
+        return Math.round(250 / val); // 1→250ms, 5→50ms, 10→25ms
+    }
+
     window.gcStepNext = function() {
         // 动画进行中时禁止点击"下一步"
         if (window.gcReadingAnimating) return;
@@ -343,7 +364,6 @@ function showGCSteps(victimSB) {
             // 开始逐页动画
             window.gcReadingAnimating = true;
             let readIndex = 0;
-            const readDelay = 100; // 每页100ms
 
             function readNextPage() {
                 if (readIndex >= ramData.length) {
@@ -382,7 +402,7 @@ function showGCSteps(victimSB) {
 
                 window.SSDSimulator.renderer.renderSSD();
                 readIndex++;
-                setTimeout(readNextPage, readDelay);
+                setTimeout(readNextPage, getAnimDelay());
             }
 
             readNextPage();
@@ -418,21 +438,75 @@ function showGCSteps(victimSB) {
             window.SSDSimulator.renderer.renderSSD();
 
         } else if (currentStep === 4) {
-            // Step 4: 按照写入策略将RAM数据写回
-            updateStepUI(4, '③ 写入策略写回数据',
-                `正在按照写入策略将RAM数据写回...\n\n` +
-                `写入策略:\n` +
-                `  1. 检查当前PSB是否写满\n` +
-                `  2. 跳转到空页最多的PSB\n` +
-                `  3. 按page→die顺序写入\n\n` +
-                `写回目标: SB${window.gcWriteTargetPsb}\n` +
-                `待写回: ${window.gcRamData.length} 个有效页`);
-
-            // 记录GC写回涉及的物理block（SB + Die组合）集合（用于更新write age）
+            // Step 4: 按照写入策略将RAM数据写回 - 改为逐页动画
+            const writeData = [...window.gcRamData];
+            const totalToWrite = writeData.length;
             const gcWrittenBlocks = new Set();
 
-            // 执行写入（按照写入策略）
-            window.gcRamData.forEach(data => {
+            // 如果已无数据待写回，直接完成
+            if (totalToWrite === 0) {
+                updateStepUI(4, '③ 写入策略写回数据', '没有有效页需要写回，GC完成！\n\n点击 "下一步" 完成GC。');
+                window.gcRamData = null;
+                return;
+            }
+
+            const descLines = [
+                `正在逐页写回RAM数据到空闲页...\n\n`,
+                `写入策略:\n`,
+                `  1. 检查当前PSB是否写满\n`,
+                `  2. 跳转到空页最多的PSB\n`,
+                `  3. 按page→die顺序写入\n\n`,
+                `待写回: ${totalToWrite} 个有效页\n`
+            ];
+
+            updateStepUI(4, '③ 写入策略写回数据', descLines.join(''));
+
+            // 禁用"下一步"按钮
+            const nextBtn = document.querySelector('#gcStepModal .btn-warning');
+            if (nextBtn) {
+                nextBtn.disabled = true;
+                nextBtn.textContent = '写回中...';
+            }
+
+            // 开始逐页写回动画
+            window.gcReadingAnimating = true;
+            let writeIndex = 0;
+
+            function writeNextPage() {
+                if (writeIndex >= totalToWrite) {
+                    // 全部写回完毕
+                    // 更新GC写回涉及物理block的写入计数器
+                    gcWrittenBlocks.forEach(blockKey => {
+                        const [sb, die] = blockKey.split('_').map(Number);
+                        state.updateBlockWriteCounter(sb, die);
+                    });
+
+                    // 更新GC重新写入有效LBA计数
+                    if (totalToWrite > 0) {
+                        ssdState.gcWriteCount += totalToWrite;
+                    }
+
+                    window.gcRamData = null;
+                    window.gcReadingAnimating = false;
+
+                    if (nextBtn) {
+                        nextBtn.disabled = false;
+                        nextBtn.textContent = '下一步';
+                    }
+
+                    const doneDesc = [
+                        `✅ 写回完成！${totalToWrite} 个有效页已全部写回\n\n`,
+                        `点击 "下一步" 完成GC。`
+                    ];
+                    document.getElementById('gcStepDesc').textContent = doneDesc.join('');
+
+                    // 最后渲染一次确保状态同步
+                    window.SSDSimulator.renderer.renderSSD();
+                    return;
+                }
+
+                const data = writeData[writeIndex];
+
                 // 检查当前psb是否写满，需要跳转
                 if (state.isPsbFull(ssdState.currentPsb)) {
                     const bestPsb = state.selectBestPsb();
@@ -446,27 +520,27 @@ function showGCSteps(victimSB) {
                     targetPage.state = 'valid';
                     targetPage.lpa = data.lpa;
                     ssdState.lpaToPpa.set(data.lpa, targetPage.ppa);
-                    // 按物理block（SB + Die）记录
                     gcWrittenBlocks.add(`${targetPage.sb}_${targetPage.die}`);
                 }
-            });
 
-            // 记录GC写回的有效页数量（在写回前保存，因为后面会清空）
-            const gcWriteBackCount = window.gcRamData ? window.gcRamData.length : 0;
+                // 更新描述显示当前写回进度
+                const progressDesc = [
+                    `正在逐页写回RAM数据到空闲页...\n\n`,
+                    `写入策略:\n`,
+                    `  1. 检查当前PSB是否写满\n`,
+                    `  2. 跳转到空页最多的PSB\n`,
+                    `  3. 按page→die顺序写入\n\n`,
+                    `当前进度: [${'█'.repeat(Math.floor(writeIndex / Math.max(1, totalToWrite / 20)))})${'░'.repeat(Math.max(0, 20 - Math.floor(writeIndex / Math.max(1, totalToWrite / 20))))}] ${writeIndex + 1}/${totalToWrite}\n`,
+                    `正在写回: LPA${data.lpa} → SB${targetPage ? targetPage.sb : '?'} Die${targetPage ? targetPage.die : '?'} Page${targetPage ? targetPage.page : '?'}`
+                ];
+                document.getElementById('gcStepDesc').textContent = progressDesc.join('');
 
-            // 更新GC写回涉及物理block的写入计数器
-            gcWrittenBlocks.forEach(blockKey => {
-                const [sb, die] = blockKey.split('_').map(Number);
-                state.updateBlockWriteCounter(sb, die);
-            });
-
-            // 更新GC重新写入有效LBA计数（在写回完成后才计数）
-            if (gcWriteBackCount > 0) {
-                ssdState.gcWriteCount += gcWriteBackCount;
+                window.SSDSimulator.renderer.renderSSD();
+                writeIndex++;
+                setTimeout(writeNextPage, getAnimDelay());
             }
 
-            window.gcRamData = null;
-            window.SSDSimulator.renderer.renderSSD();
+            writeNextPage();
 
         } else if (currentStep > totalSteps) {
             // Complete

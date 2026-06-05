@@ -633,6 +633,68 @@ header p {
     background: var(--success);
 }
 
+/* GC步骤弹窗 - 动画速度控制 */
+.gc-speed-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+}
+
+.gc-speed-control label {
+    font-size: 11px;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.gc-speed-control input[type="range"] {
+    width: 120px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.gc-speed-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.3);
+    transition: transform 0.15s ease;
+}
+
+.gc-speed-control input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.gc-speed-control input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+.gc-speed-control span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    min-width: 24px;
+    text-align: center;
+    color: var(--accent);
+    font-weight: 600;
+}
+
 .history-nav {
     display: flex;
     justify-content: center;
