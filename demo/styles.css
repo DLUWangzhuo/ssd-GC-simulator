@@ -1122,3 +1122,114 @@ header p {
     font-size: 10px;
     fill: #00bfff;
 }
+
+/* ===== 浮窗模式样式 ===== */
+
+/* 浮窗切换按钮 - 在panel-title内 */
+.panel-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.btn-float-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.btn-float-toggle:hover {
+    background: rgba(255,255,255,0.15);
+    color: var(--accent);
+}
+
+.btn-float-toggle.active {
+    background: rgba(233, 69, 96, 0.2);
+    color: var(--accent);
+}
+
+/* 浮窗状态 - 操作控制面板整体浮起 */
+.control-panel.floating .panel:first-child,
+.control-panel.floating .panel:last-child {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.control-panel.floating {
+    position: fixed;
+    z-index: 500;
+    width: 280px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    background: var(--primary);
+    border-radius: 12px;
+    border: 1px solid var(--accent);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    cursor: grab;
+    user-select: none;
+    animation: floatIn 0.25s ease;
+}
+
+.control-panel.floating:active {
+    cursor: grabbing;
+}
+
+.control-panel.floating .panel {
+    border: none;
+    margin-top: 0 !important;
+    border-radius: 0;
+    background: transparent;
+}
+
+.control-panel.floating .panel-title {
+    cursor: grab;
+}
+
+.control-panel.floating .panel-title:active {
+    cursor: grabbing;
+}
+
+.control-panel.floating::-webkit-scrollbar {
+    width: 4px;
+}
+
+.control-panel.floating::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+}
+
+@keyframes floatIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* 浮窗拖拽时的视觉反馈 */
+.control-panel.floating.dragging {
+    opacity: 0.92;
+    transition: none;
+}
+
+/* 浮窗模式下visual area自动扩展 */
+.main-layout.has-floating {
+    grid-template-columns: 1fr;
+}
+
+.main-layout.has-floating .control-panel {
+    /* 保留fixed定位覆盖grid布局 */
+}
