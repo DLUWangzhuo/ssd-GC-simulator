@@ -96,7 +96,7 @@ def generate_script(user_operations_fn, total_pages, user_pages,
                      rounds=2, lbas_per_round=None, seed=None, name=None):
     """
     通用脚本生成入口。
-    user_operations 只需写LBA操作，断言由本函数自动添加。
+    user_operations 只需写LBA操作，seed 和轮次循环由本函数处理。
 
     Args:
         user_operations_fn: 用户操作函数，接收 ctx (ScriptBuilder) 参数
@@ -104,25 +104,35 @@ def generate_script(user_operations_fn, total_pages, user_pages,
         user_pages: 用户空间页数（LBA范围上限）
         rounds: 写入轮数
         lbas_per_round: 每轮写入页数，None则自动分配
-        seed: 随机种子
+        seed: 随机种子（框架层自动调用 random.seed，user_operations 无需关心）
         name: 脚本名称
 
     Returns:
         dict: 脚本JSON对象
     """
     if lbas_per_round is None:
-        # 自动分配：第一轮填满用户空间，后续每轮覆写总页数/轮数
-        lbas_per_round = [user_pages] + [(total_pages - user_pages) // (rounds - 1)] * (rounds - 1)
-        # 调整确保总量正确
-        diff = total_pages - sum(lbas_per_round)
-        if diff > 0 and len(lbas_per_round) > 1:
-            lbas_per_round[-1] += diff
-        elif diff > 0:
-            lbas_per_round[0] += diff
+        if rounds <= 1:
+            lbas_per_round = [total_pages]
+        else:
+            # 自动分配：第一轮填满用户空间，后续每轮覆写总页数/轮数
+            lbas_per_round = [user_pages] + [(total_pages - user_pages) // (rounds - 1)] * (rounds - 1)
+            # 调整确保总量正确
+            diff = total_pages - sum(lbas_per_round)
+            if diff > 0 and len(lbas_per_round) > 1:
+                lbas_per_round[-1] += diff
+            elif diff > 0:
+                lbas_per_round[0] += diff
+
+    if seed is not None:
+        random.seed(seed)
 
     ctx = ScriptBuilder(user_pages=user_pages)
-    user_operations_fn(ctx, total_pages=total_pages, user_pages=user_pages,
-                        rounds=rounds, lbas_per_round=lbas_per_round, seed=seed)
+
+    # 框架层按轮次循环，user_operations 只需关注 LBA 写入
+    for count in lbas_per_round:
+        if count <= 0:
+            continue
+        user_operations_fn(ctx, total_pages=count, user_pages=user_pages)
 
     # 自动添加断言
     # 当存在覆写（total_pages > user_pages）且有多轮时，检查GC被触发
@@ -130,21 +140,22 @@ def generate_script(user_operations_fn, total_pages, user_pages,
         ctx.assert_gc_count(">=", 1, desc="验证GC至少触发1次")
     ctx.assert_write_count(">=", total_pages, desc=f"验证用户写入次数 >= {total_pages}")
 
+    seed_note = f" | 随机种子: {seed}" if seed is not None else ""
     name_str = name or f"全盘随机填充 ({total_pages}页, {rounds}轮)"
     desc = (f"对SSD模拟器执行{total_pages}页的全盘随机写入填充"
             f"\n写入方式: 逐LBA随机写入+覆写，触发GC回收"
             f"\n全盘容量: {total_pages}页 | 用户空间: {user_pages}页 | LBA范围: 1-{user_pages} | 轮数: {rounds}"
-            f"\n每轮写入: {', '.join(str(c) for c in lbas_per_round if c > 0)} 页")
+            f"\n每轮写入: {', '.join(str(c) for c in lbas_per_round if c > 0)} 页"
+            f"{seed_note}")
     return ctx.build(name=name_str, description=desc)
 
 
 # ======================== 用户操作层 ========================
 
-def user_operations(ctx, total_pages=216, user_pages=180,
-                     rounds=2, lbas_per_round=None, seed=None):
+def user_operations(ctx, total_pages=216, user_pages=180):
     """
     用户操作入口 —— 只写LBA操作，不写断言。
-    断言由 generate_script 自动添加。
+    seed 和轮次循环由 generate_script 框架层处理。
 
     可用的 ctx 接口:
         ctx.write(lba, desc?)         — 写入单个LBA
@@ -156,31 +167,13 @@ def user_operations(ctx, total_pages=216, user_pages=180,
         ctx: ScriptBuilder 实例
         total_pages: 写入总页数
         user_pages: 用户空间页数（LBA范围上限）
-        rounds: 写入轮数
-        lbas_per_round: 每轮写入页数列表
-        seed: 随机种子
     """
-    if seed is not None:
-        random.seed(seed)
-
-    for r_idx, count in enumerate(lbas_per_round):
-        if count <= 0:
-            continue
-
-        # 生成本轮的所有随机LBA
-        round_lbas = [random.randint(1, user_pages) for _ in range(count)]
-
-        if r_idx == 0:
-            prefix_desc = "第1轮"
-        else:
-            prefix_desc = f"第{r_idx + 1}轮"
-
-        # 每个LBA生成一条 write 指令
-        for j, lba in enumerate(round_lbas):
-            ctx.write(
-                lba,
-                desc=f"{prefix_desc}: 写入 LBA {lba} ({j + 1}/{count})"
-            )
+    for i in range(total_pages):
+        lba = random.randint(1, user_pages)
+        ctx.write(
+            lba,
+            desc=f"随机写入 LBA {lba} ({i + 1}/{total_pages})"
+        )
 
 
 # ======================== 旧接口兼容 ========================

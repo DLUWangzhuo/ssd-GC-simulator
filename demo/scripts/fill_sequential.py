@@ -103,7 +103,7 @@ def generate_script(user_operations_fn, total_pages, divide_by=None, name=None,
     Args:
         user_operations_fn: 用户操作函数，接收 ctx (ScriptBuilder) 参数
         total_pages: 写入的总页数
-        divide_by: 可选，分批写入粒度
+        divide_by: 可选，分批写入粒度。None=逐LBA写入，>0=按粒度分批
         name: 脚本名称
         assert_write_count: 是否自动添加写入计数断言（默认开启）
 
@@ -111,7 +111,23 @@ def generate_script(user_operations_fn, total_pages, divide_by=None, name=None,
         dict: 脚本JSON对象
     """
     ctx = ScriptBuilder(user_pages=180)
-    user_operations_fn(ctx, total_pages=total_pages, divide_by=divide_by)
+
+    if divide_by and divide_by > 0:
+        # 按指定粒度分批写入（无需 user_operations 操心）
+        remaining = total_pages
+        current_lba = 1
+        batch_no = 1
+        while remaining > 0:
+            batch = min(divide_by, remaining)
+            ctx.sequential(
+                batch,
+                desc=f"第{batch_no}批: 顺序写入{batch}页 (LBA {current_lba}起)"
+            )
+            remaining -= batch
+            current_lba = (current_lba + batch - 1) % ctx.user_pages + 1
+            batch_no += 1
+    else:
+        user_operations_fn(ctx, total_pages=total_pages)
 
     # 自动添加断言（可选）
     if assert_write_count:
@@ -127,7 +143,7 @@ def generate_script(user_operations_fn, total_pages, divide_by=None, name=None,
 
 # ======================== 用户操作层 ========================
 
-def user_operations(ctx, total_pages=216, divide_by=None):
+def user_operations(ctx, total_pages=216):
     """
     用户操作入口 —— 只写LBA操作，不写断言。
     断言由 generate_script 自动添加（可通过参数关闭）。
@@ -141,32 +157,13 @@ def user_operations(ctx, total_pages=216, divide_by=None):
     Args:
         ctx: ScriptBuilder 实例
         total_pages: 写入总页数
-        divide_by: 分批粒度，None=逐LBA写入，>0=按粒度分批
     """
-    user_pages = ctx.user_pages  # 180
-
-    if divide_by and divide_by > 0:
-        # 按指定粒度分批写入
-        remaining = total_pages
-        current_lba = 1
-        batch_no = 1
-        while remaining > 0:
-            batch = min(divide_by, remaining)
-            ctx.sequential(
-                batch,
-                desc=f"第{batch_no}批: 顺序写入{batch}页 (LBA {current_lba}起)"
-            )
-            remaining -= batch
-            current_lba = (current_lba + batch - 1) % user_pages + 1
-            batch_no += 1
-    else:
-        # 默认无divide：每个LBA一条 write 指令
-        for i in range(total_pages):
-            lba = (i % user_pages) + 1
-            ctx.write(
-                lba,
-                desc=f"顺序写入 LBA {lba} ({i + 1}/{total_pages})"
-            )
+    for i in range(total_pages):
+        lba = (i % ctx.user_pages) + 1
+        ctx.write(
+            lba,
+            desc=f"顺序写入 LBA {lba} ({i + 1}/{total_pages})"
+        )
 
 
 # ======================== 旧接口兼容 ========================

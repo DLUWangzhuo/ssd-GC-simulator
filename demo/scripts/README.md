@@ -499,10 +499,12 @@ python fill_sequential.py -o seq_fill_360.json --total-pages 360
 ```
 
 **生成脚本的行为：**
-1. 使用 `sequential` 指令一次性（或分批）写入全部页
+1. 使用 `sequential` 指令一次性（或 `--divide` 分批）写入全部页
 2. 模拟器自动处理 PSB 切换和 OP 空间的使用
 3. 物理盘满后会触发 GC（当 GC 阈值 > 0 时）
 4. 包含断言验证写入计数
+
+> **架构说明**：`divide_by` 分批逻辑由 `generate_script` 框架层处理，用户只需在 `user_operations()` 中写 LBA 操作，无需关心分批细节。
 
 ### 9.2 `fill_random.py` — 全盘随机填充
 
@@ -569,7 +571,7 @@ python fill_random.py --user-space 144 --op-space 72 -o rand_fill_custom.json
 # custom_fill.py — 自定义写入模式
 from fill_sequential import generate_script, ScriptBuilder
 
-def my_operations(ctx, total_pages=216, divide_by=None):
+def my_operations(ctx, total_pages=216):
     """先顺序填盘，再覆写热点，最后 GC"""
     user_pages = ctx.user_pages  # 180
 
@@ -619,6 +621,60 @@ fill_sequential.py / fill_random.py
 - 脚本名称和描述信息的组装
 - 断言参数的标准化
 - 文件写入（通过 `generate_script` + 外部 `json.dump`）
+
+### 9.4 `user_operation.py` — 用户操作接口（推荐）
+
+如果你只关心 LBA 操作，不想接触框架代码，直接使用 `user_operation.py` 即可。
+它从 `fill_sequential.py` / `fill_random.py` import 框架层，自身只保留写 LBA 的逻辑。
+
+**预设例程（开箱即用）：**
+
+```bash
+# 顺序填充全盘（216页 = 180用户空间 + 36 OP空间）
+python user_operation.py -o seq_fill.json
+
+# 随机填充全盘（2轮，制造覆写触发GC）
+python user_operation.py --type random -o rand_fill.json
+
+# SPRandom 单遍快速预处理
+python user_operation.py --type sprandom -o sprandom_fill.json
+
+# SPRandom 更细粒度区域分布
+python user_operation.py --type sprandom --regions 20 -o sprandom_20.json
+
+# 按SB粒度（36页/步）分批顺序填充
+python user_operation.py --type seq --divide 36 -o seq_fill_sb.json
+
+# 可复现的随机填充（固定种子）
+python user_operation.py --type random --seed 42 -o rand_fill.json
+```
+
+> **关于 SPRandom**：SPRandom（SanDisk Pseudo-Random Fast Preconditioning）是
+> SanDisk 在 SNIA 2025 会议上提出的 SSD 快速预处理方法。它将物理盘分为 N 个
+> 区域，每个区域内以伪随机顺序写入 LBA，区域间按 Desnoyers 递减分布产生重叠，
+> 单遍写入即可同时完成填盘和稳态分布模拟，无需传统方法的多轮随机写。
+> 详见 `SNDK-Sprandom.pdf` 或 [FIO Sprandom 实现](https://github.com/axboe/fio)。
+
+**自定义操作** —— 编辑 `user_operations()` 函数：
+
+```python
+# user_operation.py — 只需写 LBA
+def user_operations(ctx, total_pages=216):
+    for i in range(total_pages):
+        lba = (i % ctx.user_pages) + 1
+        ctx.write(lba, desc=f"写入 LBA {lba} ({i + 1}/{total_pages})")
+```
+
+**在其他脚本中导入使用：**
+
+```python
+from user_operation import generate_sequential_script, user_operations
+
+script = generate_sequential_script(user_operations, total_pages=216)
+import json
+with open("my_script.json", "w") as f:
+    json.dump(script, f, ensure_ascii=False, indent=2)
+```
 
 ---
 

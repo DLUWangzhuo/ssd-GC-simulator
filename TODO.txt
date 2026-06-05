@@ -1,4 +1,5 @@
 我现在在写一个SSD模拟器，阅读目录下的README.md可了解项目架构
 
+我想简化user_operations函数的内容，user_operations函数是供用户进行读写操作编辑的接口，因此我想在里面只保留写LBA的接口，移除多余文件处理、json编辑等内容
 
 完成后更新2个README.md

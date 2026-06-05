@@ -1,0 +1,1098 @@
+{
+  "name": "全盘随机填充 (216页, 2轮)",
+  "description": "对SSD模拟器执行216页的全盘随机写入填充\n写入方式: 逐LBA随机写入+覆写，触发GC回收\n全盘容量: 216页 | 用户空间: 180页 | LBA范围: 1-180 | 轮数: 2\n每轮写入: 180, 36 页",
+  "steps": [
+    {
+      "type": "write",
+      "lba": 152,
+      "desc": "随机写入 LBA 152 (1/180)"
+    },
+    {
+      "type": "write",
+      "lba": 97,
+      "desc": "随机写入 LBA 97 (2/180)"
+    },
+    {
+      "type": "write",
+      "lba": 155,
+      "desc": "随机写入 LBA 155 (3/180)"
+    },
+    {
+      "type": "write",
+      "lba": 8,
+      "desc": "随机写入 LBA 8 (4/180)"
+    },
+    {
+      "type": "write",
+      "lba": 61,
+      "desc": "随机写入 LBA 61 (5/180)"
+    },
+    {
+      "type": "write",
+      "lba": 110,
+      "desc": "随机写入 LBA 110 (6/180)"
+    },
+    {
+      "type": "write",
+      "lba": 45,
+      "desc": "随机写入 LBA 45 (7/180)"
+    },
+    {
+      "type": "write",
+      "lba": 72,
+      "desc": "随机写入 LBA 72 (8/180)"
+    },
+    {
+      "type": "write",
+      "lba": 86,
+      "desc": "随机写入 LBA 86 (9/180)"
+    },
+    {
+      "type": "write",
+      "lba": 80,
+      "desc": "随机写入 LBA 80 (10/180)"
+    },
+    {
+      "type": "write",
+      "lba": 131,
+      "desc": "随机写入 LBA 131 (11/180)"
+    },
+    {
+      "type": "write",
+      "lba": 104,
+      "desc": "随机写入 LBA 104 (12/180)"
+    },
+    {
+      "type": "write",
+      "lba": 132,
+      "desc": "随机写入 LBA 132 (13/180)"
+    },
+    {
+      "type": "write",
+      "lba": 55,
+      "desc": "随机写入 LBA 55 (14/180)"
+    },
+    {
+      "type": "write",
+      "lba": 21,
+      "desc": "随机写入 LBA 21 (15/180)"
+    },
+    {
+      "type": "write",
+      "lba": 127,
+      "desc": "随机写入 LBA 127 (16/180)"
+    },
+    {
+      "type": "write",
+      "lba": 147,
+      "desc": "随机写入 LBA 147 (17/180)"
+    },
+    {
+      "type": "write",
+      "lba": 163,
+      "desc": "随机写入 LBA 163 (18/180)"
+    },
+    {
+      "type": "write",
+      "lba": 15,
+      "desc": "随机写入 LBA 15 (19/180)"
+    },
+    {
+      "type": "write",
+      "lba": 42,
+      "desc": "随机写入 LBA 42 (20/180)"
+    },
+    {
+      "type": "write",
+      "lba": 63,
+      "desc": "随机写入 LBA 63 (21/180)"
+    },
+    {
+      "type": "write",
+      "lba": 72,
+      "desc": "随机写入 LBA 72 (22/180)"
+    },
+    {
+      "type": "write",
+      "lba": 165,
+      "desc": "随机写入 LBA 165 (23/180)"
+    },
+    {
+      "type": "write",
+      "lba": 78,
+      "desc": "随机写入 LBA 78 (24/180)"
+    },
+    {
+      "type": "write",
+      "lba": 76,
+      "desc": "随机写入 LBA 76 (25/180)"
+    },
+    {
+      "type": "write",
+      "lba": 77,
+      "desc": "随机写入 LBA 77 (26/180)"
+    },
+    {
+      "type": "write",
+      "lba": 63,
+      "desc": "随机写入 LBA 63 (27/180)"
+    },
+    {
+      "type": "write",
+      "lba": 152,
+      "desc": "随机写入 LBA 152 (28/180)"
+    },
+    {
+      "type": "write",
+      "lba": 173,
+      "desc": "随机写入 LBA 173 (29/180)"
+    },
+    {
+      "type": "write",
+      "lba": 163,
+      "desc": "随机写入 LBA 163 (30/180)"
+    },
+    {
+      "type": "write",
+      "lba": 170,
+      "desc": "随机写入 LBA 170 (31/180)"
+    },
+    {
+      "type": "write",
+      "lba": 149,
+      "desc": "随机写入 LBA 149 (32/180)"
+    },
+    {
+      "type": "write",
+      "lba": 149,
+      "desc": "随机写入 LBA 149 (33/180)"
+    },
+    {
+      "type": "write",
+      "lba": 171,
+      "desc": "随机写入 LBA 171 (34/180)"
+    },
+    {
+      "type": "write",
+      "lba": 6,
+      "desc": "随机写入 LBA 6 (35/180)"
+    },
+    {
+      "type": "write",
+      "lba": 126,
+      "desc": "随机写入 LBA 126 (36/180)"
+    },
+    {
+      "type": "write",
+      "lba": 39,
+      "desc": "随机写入 LBA 39 (37/180)"
+    },
+    {
+      "type": "write",
+      "lba": 96,
+      "desc": "随机写入 LBA 96 (38/180)"
+    },
+    {
+      "type": "write",
+      "lba": 48,
+      "desc": "随机写入 LBA 48 (39/180)"
+    },
+    {
+      "type": "write",
+      "lba": 26,
+      "desc": "随机写入 LBA 26 (40/180)"
+    },
+    {
+      "type": "write",
+      "lba": 67,
+      "desc": "随机写入 LBA 67 (41/180)"
+    },
+    {
+      "type": "write",
+      "lba": 73,
+      "desc": "随机写入 LBA 73 (42/180)"
+    },
+    {
+      "type": "write",
+      "lba": 8,
+      "desc": "随机写入 LBA 8 (43/180)"
+    },
+    {
+      "type": "write",
+      "lba": 18,
+      "desc": "随机写入 LBA 18 (44/180)"
+    },
+    {
+      "type": "write",
+      "lba": 154,
+      "desc": "随机写入 LBA 154 (45/180)"
+    },
+    {
+      "type": "write",
+      "lba": 11,
+      "desc": "随机写入 LBA 11 (46/180)"
+    },
+    {
+      "type": "write",
+      "lba": 14,
+      "desc": "随机写入 LBA 14 (47/180)"
+    },
+    {
+      "type": "write",
+      "lba": 102,
+      "desc": "随机写入 LBA 102 (48/180)"
+    },
+    {
+      "type": "write",
+      "lba": 46,
+      "desc": "随机写入 LBA 46 (49/180)"
+    },
+    {
+      "type": "write",
+      "lba": 125,
+      "desc": "随机写入 LBA 125 (50/180)"
+    },
+    {
+      "type": "write",
+      "lba": 151,
+      "desc": "随机写入 LBA 151 (51/180)"
+    },
+    {
+      "type": "write",
+      "lba": 90,
+      "desc": "随机写入 LBA 90 (52/180)"
+    },
+    {
+      "type": "write",
+      "lba": 7,
+      "desc": "随机写入 LBA 7 (53/180)"
+    },
+    {
+      "type": "write",
+      "lba": 74,
+      "desc": "随机写入 LBA 74 (54/180)"
+    },
+    {
+      "type": "write",
+      "lba": 125,
+      "desc": "随机写入 LBA 125 (55/180)"
+    },
+    {
+      "type": "write",
+      "lba": 148,
+      "desc": "随机写入 LBA 148 (56/180)"
+    },
+    {
+      "type": "write",
+      "lba": 117,
+      "desc": "随机写入 LBA 117 (57/180)"
+    },
+    {
+      "type": "write",
+      "lba": 170,
+      "desc": "随机写入 LBA 170 (58/180)"
+    },
+    {
+      "type": "write",
+      "lba": 115,
+      "desc": "随机写入 LBA 115 (59/180)"
+    },
+    {
+      "type": "write",
+      "lba": 80,
+      "desc": "随机写入 LBA 80 (60/180)"
+    },
+    {
+      "type": "write",
+      "lba": 121,
+      "desc": "随机写入 LBA 121 (61/180)"
+    },
+    {
+      "type": "write",
+      "lba": 168,
+      "desc": "随机写入 LBA 168 (62/180)"
+    },
+    {
+      "type": "write",
+      "lba": 17,
+      "desc": "随机写入 LBA 17 (63/180)"
+    },
+    {
+      "type": "write",
+      "lba": 86,
+      "desc": "随机写入 LBA 86 (64/180)"
+    },
+    {
+      "type": "write",
+      "lba": 147,
+      "desc": "随机写入 LBA 147 (65/180)"
+    },
+    {
+      "type": "write",
+      "lba": 134,
+      "desc": "随机写入 LBA 134 (66/180)"
+    },
+    {
+      "type": "write",
+      "lba": 62,
+      "desc": "随机写入 LBA 62 (67/180)"
+    },
+    {
+      "type": "write",
+      "lba": 100,
+      "desc": "随机写入 LBA 100 (68/180)"
+    },
+    {
+      "type": "write",
+      "lba": 154,
+      "desc": "随机写入 LBA 154 (69/180)"
+    },
+    {
+      "type": "write",
+      "lba": 55,
+      "desc": "随机写入 LBA 55 (70/180)"
+    },
+    {
+      "type": "write",
+      "lba": 56,
+      "desc": "随机写入 LBA 56 (71/180)"
+    },
+    {
+      "type": "write",
+      "lba": 27,
+      "desc": "随机写入 LBA 27 (72/180)"
+    },
+    {
+      "type": "write",
+      "lba": 34,
+      "desc": "随机写入 LBA 34 (73/180)"
+    },
+    {
+      "type": "write",
+      "lba": 101,
+      "desc": "随机写入 LBA 101 (74/180)"
+    },
+    {
+      "type": "write",
+      "lba": 97,
+      "desc": "随机写入 LBA 97 (75/180)"
+    },
+    {
+      "type": "write",
+      "lba": 34,
+      "desc": "随机写入 LBA 34 (76/180)"
+    },
+    {
+      "type": "write",
+      "lba": 59,
+      "desc": "随机写入 LBA 59 (77/180)"
+    },
+    {
+      "type": "write",
+      "lba": 38,
+      "desc": "随机写入 LBA 38 (78/180)"
+    },
+    {
+      "type": "write",
+      "lba": 40,
+      "desc": "随机写入 LBA 40 (79/180)"
+    },
+    {
+      "type": "write",
+      "lba": 143,
+      "desc": "随机写入 LBA 143 (80/180)"
+    },
+    {
+      "type": "write",
+      "lba": 85,
+      "desc": "随机写入 LBA 85 (81/180)"
+    },
+    {
+      "type": "write",
+      "lba": 133,
+      "desc": "随机写入 LBA 133 (82/180)"
+    },
+    {
+      "type": "write",
+      "lba": 70,
+      "desc": "随机写入 LBA 70 (83/180)"
+    },
+    {
+      "type": "write",
+      "lba": 139,
+      "desc": "随机写入 LBA 139 (84/180)"
+    },
+    {
+      "type": "write",
+      "lba": 20,
+      "desc": "随机写入 LBA 20 (85/180)"
+    },
+    {
+      "type": "write",
+      "lba": 89,
+      "desc": "随机写入 LBA 89 (86/180)"
+    },
+    {
+      "type": "write",
+      "lba": 117,
+      "desc": "随机写入 LBA 117 (87/180)"
+    },
+    {
+      "type": "write",
+      "lba": 95,
+      "desc": "随机写入 LBA 95 (88/180)"
+    },
+    {
+      "type": "write",
+      "lba": 11,
+      "desc": "随机写入 LBA 11 (89/180)"
+    },
+    {
+      "type": "write",
+      "lba": 144,
+      "desc": "随机写入 LBA 144 (90/180)"
+    },
+    {
+      "type": "write",
+      "lba": 46,
+      "desc": "随机写入 LBA 46 (91/180)"
+    },
+    {
+      "type": "write",
+      "lba": 59,
+      "desc": "随机写入 LBA 59 (92/180)"
+    },
+    {
+      "type": "write",
+      "lba": 170,
+      "desc": "随机写入 LBA 170 (93/180)"
+    },
+    {
+      "type": "write",
+      "lba": 102,
+      "desc": "随机写入 LBA 102 (94/180)"
+    },
+    {
+      "type": "write",
+      "lba": 155,
+      "desc": "随机写入 LBA 155 (95/180)"
+    },
+    {
+      "type": "write",
+      "lba": 94,
+      "desc": "随机写入 LBA 94 (96/180)"
+    },
+    {
+      "type": "write",
+      "lba": 83,
+      "desc": "随机写入 LBA 83 (97/180)"
+    },
+    {
+      "type": "write",
+      "lba": 134,
+      "desc": "随机写入 LBA 134 (98/180)"
+    },
+    {
+      "type": "write",
+      "lba": 44,
+      "desc": "随机写入 LBA 44 (99/180)"
+    },
+    {
+      "type": "write",
+      "lba": 141,
+      "desc": "随机写入 LBA 141 (100/180)"
+    },
+    {
+      "type": "write",
+      "lba": 95,
+      "desc": "随机写入 LBA 95 (101/180)"
+    },
+    {
+      "type": "write",
+      "lba": 35,
+      "desc": "随机写入 LBA 35 (102/180)"
+    },
+    {
+      "type": "write",
+      "lba": 129,
+      "desc": "随机写入 LBA 129 (103/180)"
+    },
+    {
+      "type": "write",
+      "lba": 139,
+      "desc": "随机写入 LBA 139 (104/180)"
+    },
+    {
+      "type": "write",
+      "lba": 56,
+      "desc": "随机写入 LBA 56 (105/180)"
+    },
+    {
+      "type": "write",
+      "lba": 167,
+      "desc": "随机写入 LBA 167 (106/180)"
+    },
+    {
+      "type": "write",
+      "lba": 134,
+      "desc": "随机写入 LBA 134 (107/180)"
+    },
+    {
+      "type": "write",
+      "lba": 38,
+      "desc": "随机写入 LBA 38 (108/180)"
+    },
+    {
+      "type": "write",
+      "lba": 21,
+      "desc": "随机写入 LBA 21 (109/180)"
+    },
+    {
+      "type": "write",
+      "lba": 103,
+      "desc": "随机写入 LBA 103 (110/180)"
+    },
+    {
+      "type": "write",
+      "lba": 89,
+      "desc": "随机写入 LBA 89 (111/180)"
+    },
+    {
+      "type": "write",
+      "lba": 61,
+      "desc": "随机写入 LBA 61 (112/180)"
+    },
+    {
+      "type": "write",
+      "lba": 88,
+      "desc": "随机写入 LBA 88 (113/180)"
+    },
+    {
+      "type": "write",
+      "lba": 21,
+      "desc": "随机写入 LBA 21 (114/180)"
+    },
+    {
+      "type": "write",
+      "lba": 27,
+      "desc": "随机写入 LBA 27 (115/180)"
+    },
+    {
+      "type": "write",
+      "lba": 126,
+      "desc": "随机写入 LBA 126 (116/180)"
+    },
+    {
+      "type": "write",
+      "lba": 167,
+      "desc": "随机写入 LBA 167 (117/180)"
+    },
+    {
+      "type": "write",
+      "lba": 77,
+      "desc": "随机写入 LBA 77 (118/180)"
+    },
+    {
+      "type": "write",
+      "lba": 22,
+      "desc": "随机写入 LBA 22 (119/180)"
+    },
+    {
+      "type": "write",
+      "lba": 149,
+      "desc": "随机写入 LBA 149 (120/180)"
+    },
+    {
+      "type": "write",
+      "lba": 129,
+      "desc": "随机写入 LBA 129 (121/180)"
+    },
+    {
+      "type": "write",
+      "lba": 135,
+      "desc": "随机写入 LBA 135 (122/180)"
+    },
+    {
+      "type": "write",
+      "lba": 36,
+      "desc": "随机写入 LBA 36 (123/180)"
+    },
+    {
+      "type": "write",
+      "lba": 175,
+      "desc": "随机写入 LBA 175 (124/180)"
+    },
+    {
+      "type": "write",
+      "lba": 98,
+      "desc": "随机写入 LBA 98 (125/180)"
+    },
+    {
+      "type": "write",
+      "lba": 157,
+      "desc": "随机写入 LBA 157 (126/180)"
+    },
+    {
+      "type": "write",
+      "lba": 134,
+      "desc": "随机写入 LBA 134 (127/180)"
+    },
+    {
+      "type": "write",
+      "lba": 65,
+      "desc": "随机写入 LBA 65 (128/180)"
+    },
+    {
+      "type": "write",
+      "lba": 170,
+      "desc": "随机写入 LBA 170 (129/180)"
+    },
+    {
+      "type": "write",
+      "lba": 93,
+      "desc": "随机写入 LBA 93 (130/180)"
+    },
+    {
+      "type": "write",
+      "lba": 180,
+      "desc": "随机写入 LBA 180 (131/180)"
+    },
+    {
+      "type": "write",
+      "lba": 29,
+      "desc": "随机写入 LBA 29 (132/180)"
+    },
+    {
+      "type": "write",
+      "lba": 92,
+      "desc": "随机写入 LBA 92 (133/180)"
+    },
+    {
+      "type": "write",
+      "lba": 66,
+      "desc": "随机写入 LBA 66 (134/180)"
+    },
+    {
+      "type": "write",
+      "lba": 174,
+      "desc": "随机写入 LBA 174 (135/180)"
+    },
+    {
+      "type": "write",
+      "lba": 47,
+      "desc": "随机写入 LBA 47 (136/180)"
+    },
+    {
+      "type": "write",
+      "lba": 27,
+      "desc": "随机写入 LBA 27 (137/180)"
+    },
+    {
+      "type": "write",
+      "lba": 2,
+      "desc": "随机写入 LBA 2 (138/180)"
+    },
+    {
+      "type": "write",
+      "lba": 15,
+      "desc": "随机写入 LBA 15 (139/180)"
+    },
+    {
+      "type": "write",
+      "lba": 100,
+      "desc": "随机写入 LBA 100 (140/180)"
+    },
+    {
+      "type": "write",
+      "lba": 34,
+      "desc": "随机写入 LBA 34 (141/180)"
+    },
+    {
+      "type": "write",
+      "lba": 137,
+      "desc": "随机写入 LBA 137 (142/180)"
+    },
+    {
+      "type": "write",
+      "lba": 150,
+      "desc": "随机写入 LBA 150 (143/180)"
+    },
+    {
+      "type": "write",
+      "lba": 121,
+      "desc": "随机写入 LBA 121 (144/180)"
+    },
+    {
+      "type": "write",
+      "lba": 166,
+      "desc": "随机写入 LBA 166 (145/180)"
+    },
+    {
+      "type": "write",
+      "lba": 129,
+      "desc": "随机写入 LBA 129 (146/180)"
+    },
+    {
+      "type": "write",
+      "lba": 177,
+      "desc": "随机写入 LBA 177 (147/180)"
+    },
+    {
+      "type": "write",
+      "lba": 50,
+      "desc": "随机写入 LBA 50 (148/180)"
+    },
+    {
+      "type": "write",
+      "lba": 143,
+      "desc": "随机写入 LBA 143 (149/180)"
+    },
+    {
+      "type": "write",
+      "lba": 106,
+      "desc": "随机写入 LBA 106 (150/180)"
+    },
+    {
+      "type": "write",
+      "lba": 145,
+      "desc": "随机写入 LBA 145 (151/180)"
+    },
+    {
+      "type": "write",
+      "lba": 94,
+      "desc": "随机写入 LBA 94 (152/180)"
+    },
+    {
+      "type": "write",
+      "lba": 41,
+      "desc": "随机写入 LBA 41 (153/180)"
+    },
+    {
+      "type": "write",
+      "lba": 148,
+      "desc": "随机写入 LBA 148 (154/180)"
+    },
+    {
+      "type": "write",
+      "lba": 87,
+      "desc": "随机写入 LBA 87 (155/180)"
+    },
+    {
+      "type": "write",
+      "lba": 37,
+      "desc": "随机写入 LBA 37 (156/180)"
+    },
+    {
+      "type": "write",
+      "lba": 145,
+      "desc": "随机写入 LBA 145 (157/180)"
+    },
+    {
+      "type": "write",
+      "lba": 111,
+      "desc": "随机写入 LBA 111 (158/180)"
+    },
+    {
+      "type": "write",
+      "lba": 68,
+      "desc": "随机写入 LBA 68 (159/180)"
+    },
+    {
+      "type": "write",
+      "lba": 4,
+      "desc": "随机写入 LBA 4 (160/180)"
+    },
+    {
+      "type": "write",
+      "lba": 59,
+      "desc": "随机写入 LBA 59 (161/180)"
+    },
+    {
+      "type": "write",
+      "lba": 95,
+      "desc": "随机写入 LBA 95 (162/180)"
+    },
+    {
+      "type": "write",
+      "lba": 52,
+      "desc": "随机写入 LBA 52 (163/180)"
+    },
+    {
+      "type": "write",
+      "lba": 15,
+      "desc": "随机写入 LBA 15 (164/180)"
+    },
+    {
+      "type": "write",
+      "lba": 173,
+      "desc": "随机写入 LBA 173 (165/180)"
+    },
+    {
+      "type": "write",
+      "lba": 100,
+      "desc": "随机写入 LBA 100 (166/180)"
+    },
+    {
+      "type": "write",
+      "lba": 110,
+      "desc": "随机写入 LBA 110 (167/180)"
+    },
+    {
+      "type": "write",
+      "lba": 119,
+      "desc": "随机写入 LBA 119 (168/180)"
+    },
+    {
+      "type": "write",
+      "lba": 69,
+      "desc": "随机写入 LBA 69 (169/180)"
+    },
+    {
+      "type": "write",
+      "lba": 154,
+      "desc": "随机写入 LBA 154 (170/180)"
+    },
+    {
+      "type": "write",
+      "lba": 88,
+      "desc": "随机写入 LBA 88 (171/180)"
+    },
+    {
+      "type": "write",
+      "lba": 17,
+      "desc": "随机写入 LBA 17 (172/180)"
+    },
+    {
+      "type": "write",
+      "lba": 147,
+      "desc": "随机写入 LBA 147 (173/180)"
+    },
+    {
+      "type": "write",
+      "lba": 145,
+      "desc": "随机写入 LBA 145 (174/180)"
+    },
+    {
+      "type": "write",
+      "lba": 92,
+      "desc": "随机写入 LBA 92 (175/180)"
+    },
+    {
+      "type": "write",
+      "lba": 27,
+      "desc": "随机写入 LBA 27 (176/180)"
+    },
+    {
+      "type": "write",
+      "lba": 18,
+      "desc": "随机写入 LBA 18 (177/180)"
+    },
+    {
+      "type": "write",
+      "lba": 38,
+      "desc": "随机写入 LBA 38 (178/180)"
+    },
+    {
+      "type": "write",
+      "lba": 47,
+      "desc": "随机写入 LBA 47 (179/180)"
+    },
+    {
+      "type": "write",
+      "lba": 41,
+      "desc": "随机写入 LBA 41 (180/180)"
+    },
+    {
+      "type": "write",
+      "lba": 95,
+      "desc": "随机写入 LBA 95 (1/36)"
+    },
+    {
+      "type": "write",
+      "lba": 25,
+      "desc": "随机写入 LBA 25 (2/36)"
+    },
+    {
+      "type": "write",
+      "lba": 81,
+      "desc": "随机写入 LBA 81 (3/36)"
+    },
+    {
+      "type": "write",
+      "lba": 142,
+      "desc": "随机写入 LBA 142 (4/36)"
+    },
+    {
+      "type": "write",
+      "lba": 178,
+      "desc": "随机写入 LBA 178 (5/36)"
+    },
+    {
+      "type": "write",
+      "lba": 1,
+      "desc": "随机写入 LBA 1 (6/36)"
+    },
+    {
+      "type": "write",
+      "lba": 135,
+      "desc": "随机写入 LBA 135 (7/36)"
+    },
+    {
+      "type": "write",
+      "lba": 163,
+      "desc": "随机写入 LBA 163 (8/36)"
+    },
+    {
+      "type": "write",
+      "lba": 34,
+      "desc": "随机写入 LBA 34 (9/36)"
+    },
+    {
+      "type": "write",
+      "lba": 31,
+      "desc": "随机写入 LBA 31 (10/36)"
+    },
+    {
+      "type": "write",
+      "lba": 104,
+      "desc": "随机写入 LBA 104 (11/36)"
+    },
+    {
+      "type": "write",
+      "lba": 81,
+      "desc": "随机写入 LBA 81 (12/36)"
+    },
+    {
+      "type": "write",
+      "lba": 81,
+      "desc": "随机写入 LBA 81 (13/36)"
+    },
+    {
+      "type": "write",
+      "lba": 45,
+      "desc": "随机写入 LBA 45 (14/36)"
+    },
+    {
+      "type": "write",
+      "lba": 121,
+      "desc": "随机写入 LBA 121 (15/36)"
+    },
+    {
+      "type": "write",
+      "lba": 96,
+      "desc": "随机写入 LBA 96 (16/36)"
+    },
+    {
+      "type": "write",
+      "lba": 3,
+      "desc": "随机写入 LBA 3 (17/36)"
+    },
+    {
+      "type": "write",
+      "lba": 68,
+      "desc": "随机写入 LBA 68 (18/36)"
+    },
+    {
+      "type": "write",
+      "lba": 97,
+      "desc": "随机写入 LBA 97 (19/36)"
+    },
+    {
+      "type": "write",
+      "lba": 33,
+      "desc": "随机写入 LBA 33 (20/36)"
+    },
+    {
+      "type": "write",
+      "lba": 14,
+      "desc": "随机写入 LBA 14 (21/36)"
+    },
+    {
+      "type": "write",
+      "lba": 150,
+      "desc": "随机写入 LBA 150 (22/36)"
+    },
+    {
+      "type": "write",
+      "lba": 155,
+      "desc": "随机写入 LBA 155 (23/36)"
+    },
+    {
+      "type": "write",
+      "lba": 171,
+      "desc": "随机写入 LBA 171 (24/36)"
+    },
+    {
+      "type": "write",
+      "lba": 178,
+      "desc": "随机写入 LBA 178 (25/36)"
+    },
+    {
+      "type": "write",
+      "lba": 44,
+      "desc": "随机写入 LBA 44 (26/36)"
+    },
+    {
+      "type": "write",
+      "lba": 84,
+      "desc": "随机写入 LBA 84 (27/36)"
+    },
+    {
+      "type": "write",
+      "lba": 130,
+      "desc": "随机写入 LBA 130 (28/36)"
+    },
+    {
+      "type": "write",
+      "lba": 74,
+      "desc": "随机写入 LBA 74 (29/36)"
+    },
+    {
+      "type": "write",
+      "lba": 16,
+      "desc": "随机写入 LBA 16 (30/36)"
+    },
+    {
+      "type": "write",
+      "lba": 105,
+      "desc": "随机写入 LBA 105 (31/36)"
+    },
+    {
+      "type": "write",
+      "lba": 92,
+      "desc": "随机写入 LBA 92 (32/36)"
+    },
+    {
+      "type": "write",
+      "lba": 91,
+      "desc": "随机写入 LBA 91 (33/36)"
+    },
+    {
+      "type": "write",
+      "lba": 177,
+      "desc": "随机写入 LBA 177 (34/36)"
+    },
+    {
+      "type": "write",
+      "lba": 85,
+      "desc": "随机写入 LBA 85 (35/36)"
+    },
+    {
+      "type": "write",
+      "lba": 157,
+      "desc": "随机写入 LBA 157 (36/36)"
+    },
+    {
+      "type": "assert_gc_count",
+      "op": ">=",
+      "value": 1,
+      "desc": "验证GC至少触发1次"
+    },
+    {
+      "type": "assert_write_count",
+      "op": ">=",
+      "value": 216,
+      "desc": "验证用户写入次数 >= 216"
+    }
+  ]
+}
