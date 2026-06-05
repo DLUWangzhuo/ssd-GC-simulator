@@ -7,6 +7,15 @@
 let showFitLine = false;
 let showTargetLine = false;
 
+// 图表缩放比例
+let chartScale = {
+    width: 100,  // 柱宽缩放百分比
+    height: 100  // 柱高缩放百分比
+};
+
+// 基础高度值
+const BASE_BAR_HEIGHT = 120;
+
 /**
  * 计算线性回归（最小二乘法）
  * @param {Array} points - [{x, y}] 格式的点数组
@@ -192,6 +201,51 @@ function updateMappingTable() {
 }
 
 /**
+ * 更新图表缩放
+ */
+function updateChartScale() {
+    const widthSlider = document.getElementById('barWidthSlider');
+    const heightSlider = document.getElementById('barHeightSlider');
+
+    if (widthSlider) {
+        chartScale.width = parseInt(widthSlider.value, 10);
+        document.getElementById('barWidthValue').textContent = chartScale.width + '%';
+    }
+
+    if (heightSlider) {
+        chartScale.height = parseInt(heightSlider.value, 10);
+        document.getElementById('barHeightValue').textContent = chartScale.height + '%';
+    }
+
+    // 重新渲染统计面板
+    updateBlockStatsPanel();
+}
+
+/**
+ * 重置图表缩放
+ */
+function resetChartScale() {
+    chartScale.width = 100;
+    chartScale.height = 100;
+
+    const widthSlider = document.getElementById('barWidthSlider');
+    const heightSlider = document.getElementById('barHeightSlider');
+
+    if (widthSlider) {
+        widthSlider.value = 100;
+        document.getElementById('barWidthValue').textContent = '100%';
+    }
+
+    if (heightSlider) {
+        heightSlider.value = 100;
+        document.getElementById('barHeightValue').textContent = '100%';
+    }
+
+    // 重新渲染统计面板
+    updateBlockStatsPanel();
+}
+
+/**
  * 更新Block Write Age统计面板
  * 按物理block（SB + Die）渲染柱状图
  * 每个柱子：灰色(下方)=有效页，红色(上方)=无效页
@@ -206,6 +260,9 @@ function updateBlockStatsPanel() {
     // 清空容器
     chartContainer.innerHTML = '';
 
+    // 计算实际高度
+    const scaledHeight = BASE_BAR_HEIGHT * (chartScale.height / 100);
+
     // 创建带Y轴的容器
     const chartWithAxis = document.createElement('div');
     chartWithAxis.className = 'stats-chart-with-axis';
@@ -213,6 +270,7 @@ function updateBlockStatsPanel() {
     // 渲染Y轴标签
     const yAxisContainer = document.createElement('div');
     yAxisContainer.className = 'stats-y-axis';
+    yAxisContainer.style.height = scaledHeight + 'px';
     yAxisContainer.innerHTML = `
         <span>100%</span>
         <span>75%</span>
@@ -229,13 +287,26 @@ function updateBlockStatsPanel() {
     const dataPoints = [];
 
     // 渲染柱状图
+    const gapWidth = 4; // 固定水平间隔（与CSS中的gap一致）
     stats.forEach((stat, index) => {
+        // 计算缩放后的宽度
+        const baseWidth = 28;
+        const minWidth = 14;
+        const maxWidth = 28;
+        const scaledBarWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * (chartScale.width / 100)));
+        // 容器宽度 = 柱宽 + 固定间隔（用于与下一个柱子的间隔）
+        const scaledContainerWidth = scaledBarWidth + gapWidth;
+
         const barContainer = document.createElement('div');
         barContainer.className = 'stats-bar-container';
+        barContainer.style.minWidth = scaledContainerWidth + 'px';
+        barContainer.style.width = scaledContainerWidth + 'px';
 
         // 柱状图（包含空白、有效、无效三部分）
         const barWrapper = document.createElement('div');
         barWrapper.className = 'stats-bar-wrapper';
+        barWrapper.style.height = scaledHeight + 'px';
+        barWrapper.style.width = '100%';
 
         // 使用 stat 中已有的各状态数量
         const validPercent = (stat.validCount / stat.totalCount) * 100;
@@ -245,13 +316,17 @@ function updateBlockStatsPanel() {
         // 记录数据点（用于拟合线）
         dataPoints.push({ x: index, y: validPercent });
 
-        const validHeight = (validPercent / 100) * 120;
-        const invalidHeight = (invalidPercent / 100) * 120;
-        const emptyHeight = (emptyPercent / 100) * 120;
+        const validHeight = (validPercent / 100) * scaledHeight;
+        const invalidHeight = (invalidPercent / 100) * scaledHeight;
+        const emptyHeight = (emptyPercent / 100) * scaledHeight;
 
         // 创建堆叠柱状图容器
         const stackedBar = document.createElement('div');
         stackedBar.className = 'stats-stacked-bar';
+        stackedBar.style.height = scaledHeight + 'px';
+        stackedBar.style.width = scaledBarWidth + 'px';
+        stackedBar.style.maxWidth = scaledBarWidth + 'px';
+        stackedBar.style.minWidth = scaledBarWidth + 'px';
 
         // 空白部分（白色，顶部100%刻度处，向下延伸）
         const emptyBar = document.createElement('div');
@@ -304,36 +379,81 @@ function updateBlockStatsPanel() {
         barsContainer.appendChild(barContainer);
     });
 
+    // 添加X轴标签
+    const xAxisLabel = document.createElement('div');
+    xAxisLabel.className = 'stats-axis-label';
+    xAxisLabel.style.textAlign = 'center';
+    xAxisLabel.style.width = '100%';
+    xAxisLabel.innerHTML = '<span style="opacity: 0.6;">← block write age: Old</span>' +
+        '<span style="margin: 0 20px; opacity: 0.3;">|</span>' +
+        '<span style="opacity: 0.6;">block write age: Recent →</span>';
+
     chartWithAxis.appendChild(yAxisContainer);
     chartWithAxis.appendChild(barsContainer);
 
+    // 先添加 xAxisLabel 到 DOM（作为占位）
+    chartContainer.appendChild(xAxisLabel);
+
+    // 插入 chartWithAxis 到 xAxisLabel 前面
+    chartContainer.insertBefore(chartWithAxis, xAxisLabel);
+
+    // 计算 barsContainer 相对于 chartWithAxis 的实际偏移
+    const yAxisWidth = yAxisContainer.getBoundingClientRect().width;
+    const chartAxisGap = 8; // 与 CSS 中的 gap: 8px 一致
+    const barsOffsetLeft = yAxisWidth + chartAxisGap;
+
     // 如果启用拟合线或目标线，添加SVG覆盖层
     if ((showFitLine && dataPoints.length >= 2) || showTargetLine) {
-        const barWidth = 44;
-        const svgWidth = stats.length * barWidth;
-        const svgHeight = 120;
+        // 使用与条形图相同的宽度计算逻辑
+        const baseWidth = 28;
+        const minWidth = 14;
+        const maxWidth = 28;
+        const scaledBarWidth = Math.max(minWidth, Math.min(maxWidth, baseWidth * (chartScale.width / 100)));
+        // SVG宽度需要包含条形宽度 + 固定间隔
+        const gapWidth = 4; // 固定间隔宽度
+        const svgBarWidth = scaledBarWidth + gapWidth;
+        const svgHeight = scaledHeight;
 
-        // 创建SVG容器
+        // 直线坐标系端点坐标（与柱条边界对齐）
+        // 布局分析（CSS gap已移除，通过container宽度控制间隔）：
+        // - 每个barContainer宽度 = scaledBarWidth + gapWidth = svgBarWidth
+        // - barWrapper宽度 = 100%，justify-content: center
+        // - stackedBar宽度 = scaledBarWidth，居中
+        // - 柱条左侧边距(相对container) = gapWidth/2（居中偏移）
+        // - 柱条总跨度宽度 = n * svgBarWidth
+        const barHalfGap = gapWidth / 2;
+        const coordWidth = stats.length * svgBarWidth; // SVG覆盖所有container的完整宽度
+        // 第一个柱条左边（X轴起点）
+        const fitLineX1 = barHalfGap;
+        // 最后一个柱条右边（X轴终点）
+        const fitLineX2 = stats.length * svgBarWidth - barHalfGap;
+        const targetLineX1 = fitLineX1;
+        const targetLineX2 = fitLineX2;
+
+        // 创建SVG容器覆盖整个barsContainer区域
         const svgContainer = document.createElement('div');
         svgContainer.className = 'fit-line-container';
-        svgContainer.style.cssText = 'position: absolute; top: 0; left: 40px; width: ' + svgWidth + 'px; height: ' + svgHeight + 'px; pointer-events: none; z-index: 10;';
+        svgContainer.style.cssText = `position: absolute; top: 0; left: ${barsOffsetLeft}px; width: ${coordWidth}px; height: ${svgHeight}px; pointer-events: none; z-index: 10;`;
 
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('class', 'fit-line-svg');
-        svg.style.cssText = 'width: ' + svgWidth + 'px; height: ' + svgHeight + 'px;';
-        svg.setAttribute('viewBox', '0 0 ' + svgWidth + ' ' + svgHeight);
+        svg.style.cssText = `width: ${coordWidth}px; height: ${svgHeight}px;`;
+        svg.setAttribute('viewBox', `0 0 ${coordWidth} ${svgHeight}`);
         svg.setAttribute('preserveAspectRatio', 'none');
 
-        const getX = (index) => index * barWidth + barWidth / 2;
-        const getY = (validPercent) => svgHeight - validPercent * 1.2;
+        // 计算柱子的中心x坐标（相对SVG坐标系，barHalfGap对齐柱条左边）
+        const getBarCenterX = (index) => index * svgBarWidth + svgBarWidth / 2;
+        const getY = (validPercent) => svgHeight - validPercent * (svgHeight / 100);
 
         // 绘制拟合线（亮绿色）
         if (showFitLine && dataPoints.length >= 2) {
             const regression = linearRegression(dataPoints);
 
-            const x1 = getX(0);
-            const y1 = getY(Math.max(0, Math.min(100, regression.slope * 0 + regression.intercept)));
-            const x2 = getX(stats.length - 1);
+            // 拟合线使用真实端点坐标
+            const x1 = fitLineX1;
+            const x2 = fitLineX2;
+            // y值基于数据点的斜率和截距
+            const y1 = getY(Math.max(0, Math.min(100, regression.intercept)));
             const y2 = getY(Math.max(0, Math.min(100, regression.slope * (stats.length - 1) + regression.intercept)));
 
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -360,9 +480,10 @@ function updateBlockStatsPanel() {
             const maxX = stats.length - 1;
             const target = getTargetLineParams(maxX);
 
-            const x1 = getX(0);
-            const y1 = getY(Math.max(0, Math.min(100, target.slope * 0 + target.intercept)));
-            const x2 = getX(maxX);
+            // 目标线从y轴(0)到最后一个柱条结束
+            const x1 = targetLineX1;
+            const x2 = targetLineX2;
+            const y1 = getY(Math.max(0, Math.min(100, target.intercept)));
             const y2 = getY(100); // 目标线终点y=100%
 
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -388,18 +509,6 @@ function updateBlockStatsPanel() {
         chartWithAxis.style.position = 'relative';
         chartWithAxis.appendChild(svgContainer);
     }
-
-    chartContainer.appendChild(chartWithAxis);
-
-    // 添加X轴标签
-    const xAxisLabel = document.createElement('div');
-    xAxisLabel.className = 'stats-axis-label';
-    xAxisLabel.style.textAlign = 'center';
-    xAxisLabel.style.width = '100%';
-    xAxisLabel.innerHTML = '<span style="opacity: 0.6;">← block write age: Old</span>' +
-        '<span style="margin: 0 20px; opacity: 0.3;">|</span>' +
-        '<span style="opacity: 0.6;">block write age: Recent →</span>';
-    chartContainer.appendChild(xAxisLabel);
 }
 
 // 导出模块
@@ -408,5 +517,7 @@ window.SSDRenderer = {
     updateMappingTable,
     updateBlockStatsPanel,
     toggleFitLine,
-    toggleTargetLine
+    toggleTargetLine,
+    updateChartScale,
+    resetChartScale
 };

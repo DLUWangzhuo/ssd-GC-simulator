@@ -743,6 +743,72 @@ header p {
     border: 1px solid rgba(255,255,255,0.1);
 }
 
+.stats-controls {
+    margin-top: 12px;
+    padding: 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+}
+
+.stats-slider-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stats-slider-control label {
+    font-size: 11px;
+    color: var(--text);
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
+.stats-slider-control input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 80px;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.stats-slider-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.stats-slider-control input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.stats-slider-control input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.stats-slider-control span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    min-width: 36px;
+}
+
 .stats-header {
     display: flex;
     justify-content: space-between;
@@ -858,7 +924,6 @@ header p {
     flex-wrap: nowrap;
     align-items: flex-end;
     justify-content: flex-start;
-    gap: 6px 4px;
     overflow-x: auto;
     padding-bottom: 8px;
     flex: 1;
@@ -887,7 +952,7 @@ header p {
     flex-direction: column;
     align-items: center;
     flex: 0 0 auto;
-    min-width: 40px;
+    min-width: 0;
 }
 
 .stats-bar-wrapper {

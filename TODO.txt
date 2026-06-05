@@ -16,5 +16,4 @@ demo/
 
 
 
-添加功能：给Physical Block Write Age vs Valid% 添加追加显示功能：
-能够显示valid% = f(block write age)的线性拟合直线（亮绿色），且支持显示/隐藏功能
+“Physical Block Write Age vs Valid%”中，直线坐标系的起始位置要和最左侧柱条的起始坐标（横坐标）对齐，直线坐标系末端位置要和最右侧柱条的最右边界横坐标刻度对齐。

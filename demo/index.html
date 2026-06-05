@@ -230,6 +230,19 @@
                             </button>
                         </div>
                     </div>
+                    <div class="stats-controls">
+                        <div class="stats-slider-control">
+                            <label for="barWidthSlider">柱宽缩放:</label>
+                            <input type="range" id="barWidthSlider" min="50" max="200" value="100" oninput="window.SSDRenderer.updateChartScale()">
+                            <span id="barWidthValue">100%</span>
+                        </div>
+                        <div class="stats-slider-control">
+                            <label for="barHeightSlider">柱高缩放:</label>
+                            <input type="range" id="barHeightSlider" min="50" max="200" value="100" oninput="window.SSDRenderer.updateChartScale()">
+                            <span id="barHeightValue">100%</span>
+                        </div>
+                        <button class="btn btn-secondary btn-icon" onclick="window.SSDRenderer.resetChartScale()" title="重置缩放">重置</button>
+                    </div>
                     <div class="stats-chart-container">
                         <div class="stats-chart" id="blockStatsChart">
                             <!-- 柱状图将通过JS动态生成 -->
