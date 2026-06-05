@@ -36,8 +36,8 @@ function initModalDrag() {
     const speedSlider = document.getElementById('gcAnimSpeed');
     const speedLabel = document.getElementById('gcAnimSpeedLabel');
     if (speedSlider && speedLabel) {
-        // 映射: 1→慢(250ms), 5→中(50ms/默认), 10→快(25ms)
-        const speedNames = ['', '极慢', '很慢', '慢', '较慢', '中', '较快', '快', '很快', '极快', '最快'];
+        // 映射: 0→极慢(250ms), 1→很慢, ..., 9→最快(25ms), 10→跳过
+        const speedNames = ['极慢', '很慢', '慢', '较慢', '中', '较快', '快', '很快', '极快', '最快', '跳过'];
         function updateSpeedLabel() {
             const val = parseInt(speedSlider.value);
             speedLabel.textContent = speedNames[val] || val;
@@ -329,10 +329,18 @@ function showGCSteps(victimSB) {
     window.gcReadingAnimating = false; // 是否正在执行逐页读取动画
 
     // 获取动画延迟（从速度滑条读取）
+    // 返回 0 表示跳过动画
     function getAnimDelay() {
         const slider = document.getElementById('gcAnimSpeed');
         const val = slider ? parseInt(slider.value) : 5;
-        return Math.round(250 / val); // 1→250ms, 5→50ms, 10→25ms
+        if (val === 10) return 0; // 跳过动画
+        return Math.round(250 / (val + 1)); // 0→250ms, 9→25ms
+    }
+
+    // 检查是否为跳过模式
+    function isSkipMode() {
+        const slider = document.getElementById('gcAnimSpeed');
+        return slider && parseInt(slider.value) === 10;
     }
 
     window.gcStepNext = function() {
@@ -359,6 +367,27 @@ function showGCSteps(victimSB) {
             if (nextBtn) {
                 nextBtn.disabled = true;
                 nextBtn.textContent = '读取中...';
+            }
+
+            // 判断是否为跳过模式
+            if (isSkipMode()) {
+                // 跳过动画：一次性标记所有有效页
+                ramData.forEach(data => {
+                    const targetPage = victimPages.find(p => p.die === data.die && p.page === data.page);
+                    if (targetPage) targetPage.state = 'readToRam';
+                });
+                window.SSDSimulator.renderer.renderSSD();
+                const doneDesc = [
+                    `✅ 读取完成！SB${victimSB.sb} 的 ${ramData.length} 个有效页已全部读入RAM\n\n`,
+                    `点击 "下一步" 继续执行GC...`
+                ];
+                document.getElementById('gcStepDesc').textContent = doneDesc.join('');
+                if (nextBtn) {
+                    nextBtn.disabled = false;
+                    nextBtn.textContent = '下一步';
+                }
+                window.gcReadingAnimating = false;
+                return;
             }
 
             // 开始逐页动画
@@ -466,6 +495,47 @@ function showGCSteps(victimSB) {
             if (nextBtn) {
                 nextBtn.disabled = true;
                 nextBtn.textContent = '写回中...';
+            }
+
+            // 判断是否为跳过模式
+            if (isSkipMode()) {
+                // 跳过动画：一次性写回所有有效页
+                writeData.forEach(data => {
+                    if (state.isPsbFull(ssdState.currentPsb)) {
+                        const bestPsb = state.selectBestPsb();
+                        if (bestPsb !== -1 && bestPsb !== ssdState.currentPsb) {
+                            ssdState.currentPsb = bestPsb;
+                        }
+                    }
+                    const targetPage = state.getFirstFreePageInPsb(ssdState.currentPsb);
+                    if (targetPage) {
+                        targetPage.state = 'valid';
+                        targetPage.lpa = data.lpa;
+                        ssdState.lpaToPpa.set(data.lpa, targetPage.ppa);
+                        gcWrittenBlocks.add(`${targetPage.sb}_${targetPage.die}`);
+                    }
+                });
+
+                // 更新计数器
+                gcWrittenBlocks.forEach(blockKey => {
+                    const [sb, die] = blockKey.split('_').map(Number);
+                    state.updateBlockWriteCounter(sb, die);
+                });
+                if (totalToWrite > 0) ssdState.gcWriteCount += totalToWrite;
+                window.gcRamData = null;
+
+                window.SSDSimulator.renderer.renderSSD();
+                const doneDesc = [
+                    `✅ 写回完成！${totalToWrite} 个有效页已全部写回\n\n`,
+                    `点击 "下一步" 完成GC。`
+                ];
+                document.getElementById('gcStepDesc').textContent = doneDesc.join('');
+                if (nextBtn) {
+                    nextBtn.disabled = false;
+                    nextBtn.textContent = '下一步';
+                }
+                window.gcReadingAnimating = false;
+                return;
             }
 
             // 开始逐页写回动画
