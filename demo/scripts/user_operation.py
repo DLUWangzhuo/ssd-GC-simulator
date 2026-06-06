@@ -41,15 +41,21 @@ from fill_random import generate_script as generate_random_script
 
 def user_operations(ctx, total_pages=720):
     """
-    自定义操作 —— 按需修改此函数。
+    用户操作入口 —— 自由修改此函数，实现任意 LBA 写入逻辑。
+
+    可用 ctx 接口:
+        ctx.write(lba, desc?)              写入单个 LBA
+        ctx.sequential(count, desc?)       顺序写入 N 个 LBA
+        ctx.gc(desc?)                      触发 GC
+        ctx.wait(ms, desc?)                等待
+        ctx.assert_write_count(op, value)  断言写入次数
+        ctx.assert_gc_count(op, value)     断言 GC 触发次数
+        ctx.assert_free_pages(op, value)   断言空闲页数
 
     Args:
         ctx: ScriptBuilder 实例
         total_pages: 写入总页数
     """
-    # for i in range(total_pages):
-    #     lba = (i % ctx.user_pages) + 1
-    #     ctx.write(lba, desc=f"写入 LBA {lba} ({i + 1}/{total_pages})")
 
     """
     SSD参数
@@ -237,8 +243,8 @@ def sprandom_fill(ctx, total_pages=720, user_pages=576, num_regions=20):
 
 def main():
     parser = argparse.ArgumentParser(description="用户操作脚本生成器")
-    parser.add_argument("--type", choices=["seq", "random", "sprandom"], default="seq",
-                        help="预设类型: seq=顺序填充, random=随机填充, sprandom=SPRandom单遍预处理 (默认: seq)")
+    parser.add_argument("--type", choices=["user", "random", "sprandom"], default="user",
+                        help="预设类型: user=sprandom写物理全盘, random=随机填充, sprandom=SPRandom单遍预处理 (默认: seq)")
     parser.add_argument("--total-pages", type=int, default=None,
                         help=f"物理盘总页数 (默认: {inspect.signature(sprandom_fill).parameters['total_pages'].default})")
     parser.add_argument("--user-pages", type=int, default=None,
@@ -255,15 +261,16 @@ def main():
                         help="输出文件路径 (默认: 自动生成)")
     args = parser.parse_args()
 
-    if args.type == "seq":
+    if args.type == "user":
         _total = args.total_pages if args.total_pages is not None else inspect.signature(sequential_fill_all).parameters['total_pages'].default
-        output = args.output or f"seq_fill_{_total}pages.json"
+        output = args.output or "user_operation.json"
         script = generate_sequential_script(
             sequential_fill_all,
             total_pages=_total,
-            divide_by=args.divide if args.divide > 0 else None
+            divide_by=args.divide if args.divide > 0 else None,
+            name="user_operation"
         )
-        print(f"[OK] 顺序填充脚本已生成: {output}")
+        print(f"[OK] user脚本已生成: {output}")
 
     elif args.type == "sprandom":
         _total = args.total_pages if args.total_pages is not None else inspect.signature(sprandom_fill).parameters['total_pages'].default

@@ -134,7 +134,7 @@ def generate_script(user_operations_fn, total_pages, divide_by=None, name=None,
         ctx.assert_write_count("==", total_pages, desc=f"验证用户写入次数 = {total_pages}")
 
     return ctx.build(
-        name=name or f"全盘顺序填充 ({total_pages}页)",
+        name=name or f"写入共 ({total_pages}页)",
         description=f"对SSD模拟器执行{total_pages}页的全盘顺序写入填充"
                     f"\n写入方式: 逐LBA单步写入"
                     f"\n全盘容量: {total_pages}页 | LBA范围: 1-{ctx.user_pages}"
