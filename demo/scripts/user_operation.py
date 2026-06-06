@@ -22,7 +22,6 @@ import json
 import numpy as np
 import random
 import argparse
-import random
 import inspect
 from fill_sequential import ScriptBuilder, generate_script as generate_sequential_script
 from fill_random import generate_script as generate_random_script
@@ -77,36 +76,33 @@ def user_operations(ctx, total_pages=720):
     def F(i): #计算x(i)的OP段长度
         return 1-Y(i)
 
-    def S(i): #S(i)函数 第i个Region的目标垃圾页占比
-        return (F(i) + F(i+1))*(1/SPR_REGION_NUM)*(1/2) #参考梯形面积算法
+    def S(i): #S(i)函数 第i个Region的目标无效页占比
+        return (F(i/SPR_REGION_NUM) + F(i+1)/SPR_REGION_NUM)/2 #参考梯形面积算法
 
 
     """
     SPRandom算法开始执行
     """
-    region_invalid_ratio = np.full(SPR_REGION_NUM, 0)   #array长度为SPR_REGION_NUM
+    region_invalid_ratio = np.zeros(SPR_REGION_NUM)   #float数组
 
     for i in range(SPR_REGION_NUM):
         region_invalid_ratio[i] = S(i)
 
-    lba_write_list = np.arange(SPR_REGION_SIZE) + 1   #待写入lba列表初始化 [1:36]
+    lba_write_list = np.arange(SPR_REGION_SIZE) + 1   #待写入lba列表初始化 [1:72]
 
     for n in range(SPR_REGION_NUM): #遍历region
 
-        lba_write_list += n*SPR_REGION_SIZE   #写入lba区间 后移一个region的size
         np.random.shuffle(lba_write_list)
 
-        if(n>1):    #从第二个region开始加偏移,制造与上一个region的重叠LBA区间,制造垃圾页
+        if(n>0):    #从第二个region开始加偏移,制造与上一个region的重叠LBA区间,制造垃圾页
             lba_write_list -= int(region_invalid_ratio[n-1]*SPR_REGION_SIZE)
+
+        lba_write_list = ((lba_write_list - 1) % USER_SIZE) + 1   #写入前模USER_SIZE计算，防止写物理全盘超lba范围
 
         for lba in lba_write_list:
             ctx.write(lba, desc=f"写入 LBA {lba}")
 
-    #给写入最后region补上垃圾页
-    last_write_size = int(region_invalid_ratio[SPR_REGION_NUM-1]*SPR_REGION_SIZE)
-    last_write_lba = lba_write_list[0:last_write_size-1]
-    for lba in last_write_lba:
-        ctx.write(lba, desc=f"写入 LBA {lba}")
+        lba_write_list += SPR_REGION_SIZE   #下一个region起始位置后移一个REGION_SIZE
 
 
 
