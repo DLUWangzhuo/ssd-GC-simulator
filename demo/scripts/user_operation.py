@@ -106,7 +106,7 @@ def user_operations(ctx, total_pages=720):
         lba_write_list = ((lba_write_list - 1) % USER_SIZE) + 1   #写入前模USER_SIZE计算，防止写物理全盘超lba范围
 
         for lba in lba_write_list:
-            ctx.write(lba, desc=f"写入 LBA {lba}")
+            ctx.write(int(lba), desc=f"写入 LBA {int(lba)}")
 
         lba_write_list += SPR_REGION_SIZE   #下一个region起始位置后移一个REGION_SIZE
 
@@ -243,8 +243,8 @@ def sprandom_fill(ctx, total_pages=720, user_pages=576, num_regions=20):
 
 def main():
     parser = argparse.ArgumentParser(description="用户操作脚本生成器")
-    parser.add_argument("--type", choices=["user", "random", "sprandom"], default="user",
-                        help="预设类型: user=sprandom写物理全盘, random=随机填充, sprandom=SPRandom单遍预处理 (默认: seq)")
+    parser.add_argument("--type", choices=["user", "seq", "random", "sprandom"], default="user",
+                        help="预设类型: user=用户自定义, random=随机填充, sprandom=SPRandom单遍预处理 (默认: user)")
     parser.add_argument("--total-pages", type=int, default=None,
                         help=f"物理盘总页数 (默认: {inspect.signature(sprandom_fill).parameters['total_pages'].default})")
     parser.add_argument("--user-pages", type=int, default=None,
@@ -262,12 +262,11 @@ def main():
     args = parser.parse_args()
 
     if args.type == "user":
-        _total = args.total_pages if args.total_pages is not None else inspect.signature(sequential_fill_all).parameters['total_pages'].default
+        _total = args.total_pages if args.total_pages is not None else inspect.signature(user_operations).parameters['total_pages'].default
         output = args.output or "user_operation.json"
         script = generate_sequential_script(
-            sequential_fill_all,
+            user_operations,
             total_pages=_total,
-            divide_by=args.divide if args.divide > 0 else None,
             name="user_operation"
         )
         print(f"[OK] user脚本已生成: {output}")
@@ -301,6 +300,16 @@ def main():
         )
         seed_info = f", 种子={args.seed}" if args.seed is not None else ""
         print(f"[OK] SPRandom 预处理脚本已生成: {output} ({_regions}区域{seed_info})")
+
+    elif args.type == "seq":
+        _total = args.total_pages if args.total_pages is not None else inspect.signature(sequential_fill_all).parameters['total_pages'].default
+        output = args.output or f"seq_fill_{_total}pages.json"
+        script = generate_sequential_script(
+            sequential_fill_all,
+            total_pages=_total,
+            divide_by=args.divide if args.divide > 0 else None
+        )
+        print(f"[OK] 顺序填充脚本已生成: {output}")
 
     else:  # random
         _total = args.total_pages if args.total_pages is not None else inspect.signature(random_fill_multi_round).parameters['total_pages'].default
