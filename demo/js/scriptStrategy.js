@@ -753,7 +753,7 @@
             }
             const delay = (totalCount === -1 || executed < totalCount) ? getStepDelay() : 0;
             if (delay === 0) {
-                doStep();
+                setTimeout(doStep, 0);  // 异步调度，让UI有机会刷新
             } else {
                 setTimeout(doStep, delay);
             }
