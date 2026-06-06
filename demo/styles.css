@@ -43,6 +43,27 @@ header {
     border: 1px solid rgba(255,255,255,0.1);
 }
 
+header.header-with-logo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-align: left;
+}
+
+.header-logo {
+    flex: 0 0 auto;
+}
+
+.logo-img {
+    height: 150px;
+    width: auto;
+    display: block;
+}
+
+.header-text {
+    flex: 1;
+}
+
 header h1 {
     font-family: 'JetBrains Mono', monospace;
     font-size: 28px;
