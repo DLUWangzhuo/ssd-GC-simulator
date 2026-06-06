@@ -184,7 +184,10 @@
                             <div class="script-step-control">
                                 <button class="btn btn-secondary btn-icon" onclick="window.SSDScriptStrategy.resetAll()">⟲ 复位</button>
                                 <button class="btn btn-success btn-icon" id="scriptStepBtn" onclick="scriptStepOnce()">▶ 单步</button>
-                                <button class="btn btn-primary btn-icon" id="scriptRunBtn" onclick="scriptRunSteps(1)">▶▶ 1步</button>
+                                <span class="script-multi-step-group">
+                                    <input type="number" class="script-multi-step-input" id="multiStepCount" value="72" min="1" max="999" title="多步步数">
+                                    <button class="btn btn-primary btn-icon" id="scriptRunBtn" onclick="scriptRunMultiSteps()">▶▶ 多步</button>
+                                </span>
                                 <button class="btn btn-warning btn-icon" id="scriptRunAllBtn" onclick="scriptRunAll()">▶▶▶ 全速</button>
                                 <button class="btn btn-danger btn-icon" id="scriptStopBtn" style="display:none;" onclick="window.SSDScriptStrategy.abort()">■ 停止</button>
                             </div>
@@ -427,7 +430,25 @@
             });
         }
 
+        // 初始化多步步数默认值 = 2个PSB
+        updateMultiStepDefault();
+
         speedSliderInitialized = true;
+    }
+
+    // 更新多步步数默认值（2个PSB的页数）
+    function updateMultiStepDefault() {
+        const input = document.getElementById('multiStepCount');
+        if (input) {
+            const defaultCount = CONFIG.pagesPerSuperBlock * 2;
+            if (!input.dataset.userSet) {
+                input.value = defaultCount;
+                input.placeholder = defaultCount.toString();
+            }
+            input.addEventListener('change', function() {
+                this.dataset.userSet = 'true';
+            });
+        }
     }
 
     // 模式切换
@@ -492,6 +513,14 @@
 
     // 执行N步
     function scriptRunSteps(count) {
+        window.SSDScriptStrategy.runSteps(count);
+    }
+
+    // 多步执行（从输入框读取步数）
+    function scriptRunMultiSteps() {
+        const input = document.getElementById('multiStepCount');
+        let count = parseInt(input.value);
+        if (isNaN(count) || count < 1) count = 1;
         window.SSDScriptStrategy.runSteps(count);
     }
 

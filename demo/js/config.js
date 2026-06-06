@@ -68,6 +68,12 @@ function applyConfig() {
         updateConfigSummary();
         window.SSDSimulator.initSSD();
         window.SSDSimulator.utils.addLog(`配置已应用: ${CONFIG.totalSuperBlocks}PSB, OP空间${CONFIG.opSuperBlocks}个, 每行${CONFIG.displayCols}个`, 'gc');
+
+        // 刷新多步步数默认值
+        const input = document.getElementById('multiStepCount');
+        if (input && !input.dataset.userSet) {
+            input.value = CONFIG.pagesPerSuperBlock * 2;
+        }
     }
 }
 

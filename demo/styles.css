@@ -1425,6 +1425,32 @@ header p {
     min-width: 0;
 }
 
+/* 多步执行输入框组 */
+.script-multi-step-group {
+    display: flex;
+    flex: 1;
+    gap: 2px;
+}
+
+.script-multi-step-input {
+    width: 40px;
+    padding: 4px 2px;
+    text-align: center;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 11px;
+    min-width: 0;
+    flex: 0 0 auto;
+}
+
+.script-multi-step-input:focus {
+    outline: none;
+    border-color: #3498db;
+    background: rgba(52,152,219,0.1);
+}
+
 /* 脚本选项 */
 .script-options {
     display: flex;
