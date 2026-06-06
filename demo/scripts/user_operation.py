@@ -77,7 +77,7 @@ def user_operations(ctx, total_pages=720):
         return 1-Y(i)
 
     def S(i): #S(i)函数 第i个Region的目标无效页占比
-        return (F(i/SPR_REGION_NUM) + F(i+1)/SPR_REGION_NUM)/2 #参考梯形面积算法
+        return (F(i/SPR_REGION_NUM) + F((i+1)/SPR_REGION_NUM))/2 #参考梯形面积算法
 
 
     """
@@ -95,7 +95,7 @@ def user_operations(ctx, total_pages=720):
         np.random.shuffle(lba_write_list)
 
         if(n>0):    #从第二个region开始加偏移,制造与上一个region的重叠LBA区间,制造垃圾页
-            lba_write_list -= int(region_invalid_ratio[n-1]*SPR_REGION_SIZE)
+            lba_write_list -= round(region_invalid_ratio[n-1]*SPR_REGION_SIZE)
 
         lba_write_list = ((lba_write_list - 1) % USER_SIZE) + 1   #写入前模USER_SIZE计算，防止写物理全盘超lba范围
 
