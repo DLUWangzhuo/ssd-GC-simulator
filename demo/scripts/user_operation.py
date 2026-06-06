@@ -3,7 +3,7 @@
 用户操作接口 —— 只写 LBA 操作，不写框架代码。
 
 用法 1（预设例程）：
-    python user_operation.py                                 # 顺序填充全盘
+    python user_operation.py                                 # 用户自定义
     python user_operation.py --type random                   # 随机填充全盘
     python user_operation.py --type sprandom                 # SPRandom 单遍快速预处理
     python user_operation.py --type sprandom --regions 20    # SPRandom 自定义区域数
@@ -46,9 +46,24 @@ def user_operations(ctx, total_pages=720):
         ctx: ScriptBuilder 实例
         total_pages: 写入总页数
     """
-    for i in range(total_pages):
-        lba = (i % ctx.user_pages) + 1
-        ctx.write(lba, desc=f"写入 LBA {lba} ({i + 1}/{total_pages})")
+    # for i in range(total_pages):
+    #     lba = (i % ctx.user_pages) + 1
+    #     ctx.write(lba, desc=f"写入 LBA {lba} ({i + 1}/{total_pages})")
+
+    PSB_SIZE = 36   #物理 super block size（单位page）
+    TOTAL_SIZE = 20*PSB_SIZE
+    OP_SIZE = 4*PSB_SIZE
+    USER_SIZE = TOTAL_SIZE - OP_SIZE
+
+    OP_RATIO = OP_SIZE/TOTAL_SIZE   # OP空间占比（OP容量/物理容量）
+    
+
+    REGION = 10
+
+
+
+
+
 
 
 # ====================================================================

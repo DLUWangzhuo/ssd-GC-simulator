@@ -90,18 +90,15 @@ function toggleTargetLine() {
 
 /**
  * 计算目标拟合线参数
- * 直线过 [0, 100% - (2 * OP空间容量) / 总容量] 和 (maxX, 100%) 两点
- * 坐标系与拟合线一致：x为数据点索引，y为validPercent
- * @param {number} maxX - x轴最大值（数据点数量-1）
+ * x 轴归一化到 [0, 100]，y 为 validPercent
+ * 直线过 (0, 100-2R) 和 (100, 100%) 两点，其中 R = OP 空间占比（%）
  * @returns {object} {slope, intercept}
  */
-function getTargetLineParams(maxX) {
-    // OP空间容量占比 = OP SuperBlocks / 总 SuperBlocks
-    const opRatio = CONFIG.opSuperBlocks / CONFIG.totalSuperBlocks;
-    // y轴截距：x=0时的y值 = 100% - 2 * OP占比
-    const intercept = Math.max(0, 100 - 2 * opRatio * 100);
-    // 斜率：过(maxX, 100%)点，所以 slope = (100 - intercept) / maxX
-    const slope = (100 - intercept) / maxX;
+function getTargetLineParams() {
+    // OP 空间占比 R = opSuperBlocks / totalSuperBlocks（百分比）
+    const opPercent = (CONFIG.opSuperBlocks / CONFIG.totalSuperBlocks) * 100;
+    const intercept = Math.max(0, 100 - 2 * opPercent);  // b = 100 - 2R
+    const slope = opPercent / 50;                         // k = R / 50
     return { slope, intercept };
 }
 
@@ -283,8 +280,9 @@ function updateBlockStatsPanel() {
     const barsContainer = document.createElement('div');
     barsContainer.className = 'stats-bars-scroll-container';
 
-    // 用于拟合线计算的数据点
+    // 用于拟合线计算的数据点（x 归一化到 [0, 100]）
     const dataPoints = [];
+    const maxIndex = stats.length - 1;
 
     // 渲染柱状图
     const gapWidth = 4; // 固定水平间隔（与CSS中的gap一致）
@@ -313,8 +311,8 @@ function updateBlockStatsPanel() {
         const invalidPercent = (stat.invalidCount / stat.totalCount) * 100;
         const emptyPercent = (stat.emptyCount / stat.totalCount) * 100;
 
-        // 记录数据点（用于拟合线）
-        dataPoints.push({ x: index, y: validPercent });
+        // 记录数据点（用于拟合线），x 归一化到 [0, 100]
+        dataPoints.push({ x: maxIndex > 0 ? (index / maxIndex) * 100 : 50, y: validPercent });
 
         const validHeight = (validPercent / 100) * scaledHeight;
         const invalidHeight = (invalidPercent / 100) * scaledHeight;
@@ -452,9 +450,9 @@ function updateBlockStatsPanel() {
             // 拟合线使用真实端点坐标
             const x1 = fitLineX1;
             const x2 = fitLineX2;
-            // y值基于数据点的斜率和截距
+            // y值基于数据点的斜率和截距（x归一化到[0,100]）
             const y1 = getY(Math.max(0, Math.min(100, regression.intercept)));
-            const y2 = getY(Math.max(0, Math.min(100, regression.slope * (stats.length - 1) + regression.intercept)));
+            const y2 = getY(Math.max(0, Math.min(100, regression.slope * 100 + regression.intercept)));
 
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             line.setAttribute('x1', x1);
@@ -477,8 +475,7 @@ function updateBlockStatsPanel() {
 
         // 绘制目标拟合线（亮红色虚线）
         if (showTargetLine) {
-            const maxX = stats.length - 1;
-            const target = getTargetLineParams(maxX);
+            const target = getTargetLineParams();
 
             // 目标线从y轴(0)到最后一个柱条结束
             const x1 = targetLineX1;
